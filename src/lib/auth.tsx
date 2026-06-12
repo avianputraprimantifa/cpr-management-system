@@ -27,6 +27,9 @@ export interface Profile {
   phone: string | null;
   email: string | null;
   status: "aktif" | "nonaktif";
+  must_reset_password: boolean;
+  password_setup_completed_at: string | null;
+  default_password_kept_at: string | null;
 }
 
 interface AuthCtx {

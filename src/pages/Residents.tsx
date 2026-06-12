@@ -73,6 +73,7 @@ function satpamPhotoErrorMessage(error: unknown) {
 export default function ResidentsPage() {
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
+  const canCreateAccounts = hasRole("admin", "pengurus");
   const canManageSatpamPhoto = hasRole("admin", "pengurus");
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = readStatusFilter(searchParams.get("status"));
@@ -314,7 +315,7 @@ export default function ResidentsPage() {
               <SelectItem value="nonaktif">Nonaktif</SelectItem>
             </SelectContent>
           </Select>
-          {isAdmin && (
+          {canCreateAccounts && (
             <Button onClick={() => { setEditing(null); setOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" /> Tambah Penghuni
             </Button>

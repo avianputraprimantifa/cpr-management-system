@@ -23,10 +23,10 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/lib/auth";
 import { MONTHS_ID, formatShortDateID, periodFromMonthYear } from "@/lib/date";
 import { formatIDR } from "@/lib/currency";
+import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { BILL_STATUS_LABELS, M } from "@/lib/i18n/messages";
 import { BillFormDialog } from "@/components/ipl/BillFormDialog";
 import { BillPayDialog } from "@/components/ipl/BillPayDialog";
@@ -44,14 +44,21 @@ export type Bill = {
   period: string;
   status: "belum_dibayar" | "dalam_pengecekan" | "lunas";
   receipt_path: string | null;
+  receipt_thumbnail_path: string | null;
   paid_at: string | null;
+  payment_submitted_at: string | null;
+  verified_at: string | null;
+  verified_by: string | null;
   profiles?: { full_name: string | null; block_unit: string | null; email: string | null } | null;
 };
 
-type BillUpdate = Database["public"]["Tables"]["ipl_bills"]["Update"];
 const ALL = 0;
 const BILL_STATUSES = ["belum_dibayar", "dalam_pengecekan", "lunas"] as const satisfies readonly Bill["status"][];
 type StatusFilter = Bill["status"] | "all";
+type IplViewMode = "manage" | "mine";
+type UpdateBillStatusResponse = {
+  error?: string;
+};
 
 function readMonthParam(value: string | null, fallback: number) {
   const n = Number(value);
@@ -164,14 +171,19 @@ function StatusInlineSelect({
 
   async function applyStatus(next: Bill["status"]) {
     setBusy(true);
-    const patch: BillUpdate = { status: next };
-    if (next === "lunas") patch.paid_at = new Date().toISOString();
-    else patch.paid_at = null;
-
-    const { error } = await supabase.from("ipl_bills").update(patch).eq("id", bill.id);
+    const { data, error } = await supabase.functions.invoke("update-ipl-bill-status", {
+      body: {
+        bill_id: bill.id,
+        status: next,
+      },
+    });
+    const result = data as UpdateBillStatusResponse | null;
     setBusy(false);
     setPending(null);
-    if (error) { toast.error(`${M.saveFailed}: ${error.message}`); return; }
+    if (error || result?.error) {
+      toast.error(result?.error ?? edgeFunctionErrorMessage(error, "update-ipl-bill-status", M.saveFailed));
+      return;
+    }
     toast.success("Status diperbarui.");
     onChanged();
   }
@@ -242,7 +254,14 @@ function StatusInlineSelect({
 
 export default function IplPage() {
   const { user, hasRole } = useAuth();
-  const isStaff = hasRole("admin", "pengurus");
+  const canManageBills = hasRole("admin", "pengurus");
+  const canViewOwnBills = hasRole("pengurus", "penghuni") && !hasRole("admin");
+  const [selectedViewMode, setSelectedViewMode] = useState<IplViewMode>("manage");
+  const viewMode: IplViewMode = canManageBills
+    ? canViewOwnBills ? selectedViewMode : "manage"
+    : "mine";
+  const isStaff = canManageBills && viewMode === "manage";
+  const isOwnBills = !isStaff;
   const [searchParams] = useSearchParams();
   const qc = useQueryClient();
   const now = new Date();
@@ -308,7 +327,10 @@ export default function IplPage() {
           q = q.eq("status", statusFilter);
         }
       }
-      if (!isStaff && user) q = q.eq("resident_user_id", user.id);
+      if (isOwnBills) {
+        if (!user) return [] as Bill[];
+        q = q.eq("resident_user_id", user.id);
+      }
       const { data: bills, error } = await q;
       if (error) throw error;
       const rows = bills ?? [];
@@ -337,13 +359,17 @@ export default function IplPage() {
 
   const filteredBills = useMemo(() => {
     const rows = billsQ.data ?? [];
+    if (!isStaff) return rows;
     const term = search.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((b) => (b.profiles?.full_name ?? "").toLowerCase().includes(term));
-  }, [billsQ.data, search]);
+  }, [billsQ.data, isStaff, search]);
   const canExport = !billsQ.isLoading && filteredBills.length > 0;
-  const csvFilename = exportFilename("csv", month, year, statusFilter);
-  const excelFilename = exportFilename("xls", month, year, statusFilter);
+  const exportMonth = isStaff ? month : ALL;
+  const exportYear = isStaff ? year : ALL;
+  const exportStatus = isStaff ? statusFilter : "all";
+  const csvFilename = exportFilename("csv", exportMonth, exportYear, exportStatus);
+  const excelFilename = exportFilename("xls", exportMonth, exportYear, exportStatus);
 
   const refresh = (savedPeriod?: string) => {
     if (isStaff && savedPeriod && !allMonths && !allYears && savedPeriod !== period) {
@@ -362,10 +388,34 @@ export default function IplPage() {
           <p className="text-sm text-muted-foreground">
             {isStaff
               ? "Iuran Pemeliharaan Lingkungan — kelola tagihan bulanan penghuni."
-              : "Riwayat tagihan IPL Anda, termasuk yang belum dibayar, dalam pengecekan, dan lunas."}
+              : "Tagihan IPL Anda, termasuk yang belum dibayar, dalam pengecekan, dan lunas."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canManageBills && canViewOwnBills && (
+            <div className="flex rounded-md border bg-card p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "manage" ? "default" : "ghost"}
+                onClick={() => setSelectedViewMode("manage")}
+                aria-pressed={viewMode === "manage"}
+                className="h-8"
+              >
+                Kelola Tagihan
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewMode === "mine" ? "default" : "ghost"}
+                onClick={() => setSelectedViewMode("mine")}
+                aria-pressed={viewMode === "mine"}
+                className="h-8"
+              >
+                Tagihan Saya
+              </Button>
+            </div>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" disabled={!canExport}>
@@ -522,7 +572,7 @@ export default function IplPage() {
                   )}
                 </TableCell>
                 <TableCell className="text-right space-x-2">
-                  {!isStaff && b.status === "belum_dibayar" && (
+                  {isOwnBills && b.status === "belum_dibayar" && (
                     <Button size="sm" onClick={() => setPaying(b)}>Bayar</Button>
                   )}
                   {isStaff && b.status === "dalam_pengecekan" && b.receipt_path && (

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Mail, FlaskConical } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,14 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DevEmailPreview } from "@/components/account/DevEmailPreview";
 import { supabase } from "@/integrations/supabase/client";
-import { redirectAfterPasswordChange, setUserPassword } from "@/lib/auth-password";
+import { markPasswordSetupComplete, redirectAfterPasswordChange, setUserPassword } from "@/lib/auth-password";
 import { useAuth } from "@/lib/auth";
 import { buildRecoveryEmailPreview, type RecoveryEmailPreview } from "@/lib/recovery-email-preview";
 import { M } from "@/lib/i18n/messages";
 
 export default function AccountPasswordPage() {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
+  const { user, profile, refreshProfile } = useAuth();
   const email = profile?.email ?? user?.email ?? "";
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -72,6 +71,14 @@ export default function AccountPasswordPage() {
     if (!result.ok) {
       toast.error(`${M.saveFailed}: ${result.error}`);
       return;
+    }
+    if (profile?.must_reset_password) {
+      const setupResult = await markPasswordSetupComplete("changed");
+      if (!setupResult.ok) {
+        toast.error(`${M.saveFailed}: ${setupResult.error}`);
+        return;
+      }
+      await refreshProfile();
     }
     setDevPassword("");
     redirectAfterPasswordChange();

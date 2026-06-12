@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function ProtectedRoute({ children, allowedRoles }: Props) {
-  const { user, roles, isLoading } = useAuth();
+  const { user, profile, roles, isLoading } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -22,6 +22,9 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
   }
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  if (profile?.must_reset_password && location.pathname !== "/account/password/setup") {
+    return <Navigate to="/account/password/setup" replace state={{ from: location.pathname }} />;
   }
   if (allowedRoles && !allowedRoles.some((r) => roles.includes(r))) {
     return <Navigate to="/dashboard" replace />;

@@ -4,6 +4,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
 type Result = { ok: true } | { ok: false; error: string };
+type PasswordSetupMode = "changed" | "kept";
 
 /**
  * Update password via GoTrue HTTP API (avoids supabase-js updateUser occasionally hanging).
@@ -58,4 +59,21 @@ export async function setUserPassword(password: string): Promise<Result> {
 
 export function redirectAfterPasswordChange() {
   window.location.replace(`${window.location.origin}/account?passwordChanged=1`);
+}
+
+export async function markPasswordSetupComplete(mode: PasswordSetupMode): Promise<Result> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesi tidak valid." };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      must_reset_password: false,
+      password_setup_completed_at: mode === "changed" ? new Date().toISOString() : null,
+      default_password_kept_at: mode === "kept" ? new Date().toISOString() : null,
+    })
+    .eq("user_id", user.id);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }

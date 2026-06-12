@@ -10,13 +10,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatIDR } from "@/lib/currency";
 import type { IplSettings } from "@/lib/ipl-settings";
+import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { M } from "@/lib/i18n/messages";
+import { createReceiptThumbnailFile } from "@/lib/receipt-thumbnail";
 import { ACCEPT_BILL_RECEIPT, acceptsBillReceipt } from "@/lib/upload-file";
 
 type PayableBill = {
   id: string;
   name: string;
   amount: number;
+};
+type SubmitPaymentResponse = {
+  error?: string;
 };
 
 interface Props {
@@ -50,11 +55,32 @@ export function BillPayDialog({ open, onOpenChange, bill, onPaid, paymentSetting
       });
       if (up.error) throw up.error;
 
-      const upd = await supabase
-        .from("ipl_bills")
-        .update({ status: "dalam_pengecekan", receipt_path: path })
-        .eq("id", bill.id).eq("resident_user_id", user.id);
-      if (upd.error) throw upd.error;
+      let thumbnailPath: string | null = null;
+      const thumbnail = await createReceiptThumbnailFile(file);
+      if (thumbnail) {
+        const thumbPath = `${user.id}/thumb-${bill.id}-${Date.now()}.jpg`;
+        const thumbUp = await supabase.storage.from("payment-receipts").upload(thumbPath, thumbnail, {
+          upsert: true,
+          contentType: thumbnail.type,
+        });
+        if (thumbUp.error) {
+          console.warn("[payment receipt thumbnail upload]", thumbUp.error.message);
+        } else {
+          thumbnailPath = thumbPath;
+        }
+      }
+
+      const { data, error } = await supabase.functions.invoke("submit-ipl-payment", {
+        body: {
+          bill_id: bill.id,
+          receipt_path: path,
+          receipt_thumbnail_path: thumbnailPath,
+        },
+      });
+      const result = data as SubmitPaymentResponse | null;
+      if (error || result?.error) {
+        throw new Error(result?.error ?? edgeFunctionErrorMessage(error, "submit-ipl-payment", M.uploadFailed));
+      }
 
       toast.success(M.uploadSuccess);
       onOpenChange(false);

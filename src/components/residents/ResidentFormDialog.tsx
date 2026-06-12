@@ -27,7 +27,7 @@ const createSchema = z.object({
   full_name: z.string().min(1, M.required),
   block_unit: z.string().optional(),
   phone: z.string().optional(),
-  role: z.enum(["admin", "pengurus", "penghuni", "satpam"]),
+  role: z.enum(["pengurus", "penghuni", "satpam"]),
 });
 
 const editSchema = z.object({
@@ -37,13 +37,14 @@ const editSchema = z.object({
 });
 
 type ResidentRole = "admin" | "pengurus" | "penghuni" | "satpam";
+type CreatableResidentRole = Exclude<ResidentRole, "admin">;
 type ResidentFormValues = {
   email: string;
   password: string;
   full_name: string;
   block_unit: string;
   phone: string;
-  role: ResidentRole;
+  role: CreatableResidentRole;
 };
 type ResidentFormResident = {
   user_id: string;
@@ -56,8 +57,10 @@ type AdminCreateUserResponse = {
   error?: string;
   user_id?: string;
   email?: string;
-  role?: ResidentRole;
+  role?: CreatableResidentRole;
 };
+
+const CREATABLE_ROLES: CreatableResidentRole[] = ["pengurus", "penghuni", "satpam"];
 
 interface Props {
   open: boolean;
@@ -68,7 +71,7 @@ interface Props {
 
 export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Props) {
   const { hasRole } = useAuth();
-  const isAdmin = hasRole("admin");
+  const canCreateAccounts = hasRole("admin", "pengurus");
   const isEdit = !!resident;
   const schema = isEdit ? editSchema : createSchema;
   const editingIsSatpam = isEdit && Array.isArray(resident?.roles) && resident.roles.includes("satpam");
@@ -117,7 +120,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
       if (error) { toast.error(`${M.saveFailed}: ${error.message}`); return; }
       toast.success(M.saveSuccess);
     } else {
-      if (!isAdmin) { toast.error(M.unauthorized); return; }
+      if (!canCreateAccounts) { toast.error(M.unauthorized); return; }
       const payload = {
         ...v,
         block_unit: needsBlockUnit ? (v.block_unit?.trim() || null) : null,
@@ -154,7 +157,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {(Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>).map((k) => (
+                      {CREATABLE_ROLES.map((k) => (
                         <SelectItem key={k} value={k}>{ROLE_LABELS[k]}</SelectItem>
                       ))}
                     </SelectContent>

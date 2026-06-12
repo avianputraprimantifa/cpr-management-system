@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -17,8 +17,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
 import { MONTHS_ID, periodFromMonthYear, billNameFromPeriod } from "@/lib/date";
+import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { M, BILL_STATUS_LABELS } from "@/lib/i18n/messages";
 
 const ALL_VALUE = "__all__";
@@ -41,6 +41,14 @@ type EditableBill = {
   period: string;
   status: Values["status"];
 };
+type CreateIplBillsResponse = {
+  created?: number;
+  skipped?: number;
+  failed?: number;
+  errors?: string[];
+  period?: string;
+  error?: string;
+};
 
 interface Props {
   open: boolean;
@@ -55,7 +63,6 @@ interface Props {
 export function BillFormDialog({
   open, onOpenChange, bill, onSaved, initialMonth, initialYear, defaultAmount = 0,
 }: Props) {
-  const { user } = useAuth();
   const isEdit = !!bill;
   const now = new Date();
   const defaultMonth = initialMonth ?? now.getMonth() + 1;
@@ -63,12 +70,27 @@ export function BillFormDialog({
 
   const residentsQ = useQuery({
     enabled: open,
-    queryKey: ["active-residents-with-role-penghuni"],
+    queryKey: ["active-billable-residents"],
     queryFn: async () => {
       const { data: roleRows, error: re } = await supabase
-        .from("user_roles").select("user_id").eq("role", "penghuni");
+        .from("user_roles")
+        .select("user_id, role")
+        .in("role", ["admin", "pengurus", "penghuni", "satpam"]);
       if (re) throw re;
-      const ids = (roleRows ?? []).map((r) => r.user_id);
+
+      const rolesByUser = new Map<string, Set<string>>();
+      for (const row of roleRows ?? []) {
+        const set = rolesByUser.get(row.user_id) ?? new Set<string>();
+        set.add(row.role);
+        rolesByUser.set(row.user_id, set);
+      }
+      const ids = Array.from(rolesByUser.entries())
+        .filter(([, roles]) => (
+          (roles.has("penghuni") || roles.has("pengurus"))
+          && !roles.has("admin")
+          && !roles.has("satpam")
+        ))
+        .map(([id]) => id);
       if (ids.length === 0) return [];
       const { data, error } = await supabase
         .from("profiles")
@@ -114,9 +136,9 @@ export function BillFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bill, open, defaultMonth, defaultYear, defaultAmount]);
 
-  const month = form.watch("month");
-  const year = form.watch("year");
-  const selectedResidentId = form.watch("resident_user_id");
+  const month = useWatch({ control: form.control, name: "month" });
+  const year = useWatch({ control: form.control, name: "year" });
+  const selectedResidentId = useWatch({ control: form.control, name: "resident_user_id" });
   const isBulk = !isEdit && selectedResidentId === ALL_VALUE;
   const activeCount = residentsQ.data?.length ?? 0;
   const previewName = useMemo(() => billNameFromPeriod(periodFromMonthYear(month, year)), [month, year]);
@@ -131,45 +153,62 @@ export function BillFormDialog({
       due_date: v.due_date,
       period,
       status: v.status,
-      created_by: user?.id ?? null,
     };
 
-    if (isBulk) {
-      const targets = residentsQ.data ?? [];
-      if (targets.length === 0) {
-        toast.error("Tidak ada penghuni aktif untuk dibuatkan tagihan.");
+    if (!isEdit) {
+      const { data, error } = await supabase.functions.invoke("create-ipl-bills", {
+        body: {
+          ...basePayload,
+          resident_user_id: isBulk ? ALL_VALUE : v.resident_user_id,
+        },
+      });
+      const result = data as CreateIplBillsResponse | null;
+      if (error || result?.error) {
+        toast.error(result?.error ?? edgeFunctionErrorMessage(error, "create-ipl-bills", M.saveFailed));
         return;
       }
-      let ok = 0, skipped = 0, failed = 0;
-      for (const r of targets) {
-        const { error } = await supabase.from("ipl_bills").insert({
-          ...basePayload,
-          resident_user_id: r.user_id,
-        });
-        if (!error) ok++;
-        else if (error.code === "23505") skipped++;
-        else { failed++; console.error("[bulk bill insert]", r.user_id, error.message); }
-      }
-      if (ok > 0)      toast.success(`${ok} tagihan berhasil dibuat.`);
+
+      const created = result?.created ?? 0;
+      const skipped = result?.skipped ?? 0;
+      const failed = result?.failed ?? 0;
+      if (created > 0) toast.success(`${created} tagihan berhasil dibuat.`);
       if (skipped > 0) toast.info(`${skipped} dilewati (sudah punya tagihan untuk ${period}).`);
-      if (failed > 0)  toast.error(`${failed} gagal — cek console untuk detail.`);
-      if (ok > 0) {
+      if (failed > 0) {
+        console.error("[create-ipl-bills]", result?.errors);
+        toast.error(`${failed} gagal — cek console untuk detail.`);
+      }
+      if (created > 0) {
         onOpenChange(false);
         onSaved(period);
       }
       return;
     }
 
-    const payload = { ...basePayload, resident_user_id: v.resident_user_id };
-    const res = isEdit
-      ? await supabase.from("ipl_bills").update(payload).eq("id", bill.id)
-      : await supabase.from("ipl_bills").insert(payload);
+    const updatePayload = {
+      name: basePayload.name,
+      amount: basePayload.amount,
+      due_date: basePayload.due_date,
+      period: basePayload.period,
+    };
+    const res = await supabase.from("ipl_bills").update(updatePayload).eq("id", bill.id);
 
     if (res.error) {
       if (res.error.code === "23505") toast.error(M.duplicatePeriod);
       else toast.error(`${M.saveFailed}: ${res.error.message}`);
       return;
     }
+
+    if (bill.status !== v.status) {
+      const { data, error } = await supabase.functions.invoke("update-ipl-bill-status", {
+        body: { bill_id: bill.id, status: v.status },
+      });
+      const result = data as CreateIplBillsResponse | null;
+      if (error || result?.error) {
+        toast.error(result?.error ?? edgeFunctionErrorMessage(error, "update-ipl-bill-status", M.saveFailed));
+        return;
+      }
+    }
+
     toast.success(M.saveSuccess);
     onOpenChange(false);
     onSaved(period);

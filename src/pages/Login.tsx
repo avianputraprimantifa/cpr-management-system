@@ -90,7 +90,7 @@ export default function LoginPage() {
                   Masuk
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  Akun baru hanya dapat dibuat oleh admin.
+                  Akun baru hanya dapat dibuat oleh Admin atau Pengurus.
                 </p>
               </form>
             </Form>

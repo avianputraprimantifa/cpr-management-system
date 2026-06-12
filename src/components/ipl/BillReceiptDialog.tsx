@@ -6,71 +6,81 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { M } from "@/lib/i18n/messages";
 import { formatIDR } from "@/lib/currency";
+
+type ReceiptBill = {
+  id: string;
+  resident_user_id: string;
+  name: string;
+  amount: number;
+  status: "belum_dibayar" | "dalam_pengecekan" | "lunas";
+  receipt_path: string | null;
+};
+type UpdateBillStatusResponse = {
+  error?: string;
+};
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  bill: any | null;
+  bill: ReceiptBill | null;
   onActionDone: () => void;
 }
 
 export function BillReceiptDialog({ open, onOpenChange, bill, onActionDone }: Props) {
-  const [url, setUrl]   = useState<string | null>(null);
+  const [signedReceipt, setSignedReceipt] = useState<{ path: string; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const receiptPath = open ? bill?.receipt_path ?? null : null;
+  const url = signedReceipt?.path === receiptPath ? signedReceipt.url : null;
 
   useEffect(() => {
-    setUrl(null);
-    if (!bill?.receipt_path || !open) return;
+    if (!receiptPath) return undefined;
+    let active = true;
     supabase.storage.from("payment-receipts")
-      .createSignedUrl(bill.receipt_path, 60)
+      .createSignedUrl(receiptPath, 60)
       .then(({ data, error }) => {
+        if (!active) return;
         if (error) { toast.error(error.message); return; }
-        setUrl(data.signedUrl);
+        setSignedReceipt({ path: receiptPath, url: data.signedUrl });
       });
-  }, [bill, open]);
+    return () => { active = false; };
+  }, [receiptPath]);
 
   const isPdf = bill?.receipt_path?.toLowerCase().endsWith(".pdf");
 
-  async function confirm() {
+  async function updateStatus(
+    status: ReceiptBill["status"],
+    options: { clearReceipt?: boolean } = {},
+    successMessage: string = M.confirmSuccess,
+  ) {
     if (!bill) return;
     setBusy(true);
-    const u = await supabase
-      .from("ipl_bills")
-      .update({ status: "lunas", paid_at: new Date().toISOString() })
-      .eq("id", bill.id);
-    if (u.error) { setBusy(false); toast.error(`${M.saveFailed}: ${u.error.message}`); return; }
-    await supabase.from("notifications").insert({
-      user_id: bill.resident_user_id,
-      title: "Pembayaran Dikonfirmasi",
-      body: `${bill.name} sebesar ${formatIDR(bill.amount)} telah dikonfirmasi lunas.`,
-      type: "bill_confirmed",
+    const { data, error } = await supabase.functions.invoke("update-ipl-bill-status", {
+      body: {
+        bill_id: bill.id,
+        status,
+        clear_receipt: options.clearReceipt ?? false,
+      },
     });
+    const result = data as UpdateBillStatusResponse | null;
     setBusy(false);
-    toast.success(M.confirmSuccess);
+    if (error || result?.error) {
+      toast.error(result?.error ?? edgeFunctionErrorMessage(error, "update-ipl-bill-status", M.saveFailed));
+      return;
+    }
+    toast.success(successMessage);
     onOpenChange(false);
     onActionDone();
   }
 
+  async function confirm() {
+    await updateStatus("lunas");
+  }
+
   async function reject() {
-    if (!bill) return;
-    setBusy(true);
-    const u = await supabase
-      .from("ipl_bills")
-      .update({ status: "belum_dibayar", receipt_path: null })
-      .eq("id", bill.id);
-    if (u.error) { setBusy(false); toast.error(`${M.saveFailed}: ${u.error.message}`); return; }
-    await supabase.from("notifications").insert({
-      user_id: bill.resident_user_id,
-      title: "Pembayaran Ditolak",
-      body: `${bill.name} ditolak. Mohon unggah ulang bukti pembayaran yang valid.`,
-      type: "bill_rejected",
-    });
-    setBusy(false);
-    toast.success(M.rejectSuccess);
-    onOpenChange(false);
-    onActionDone();
+    await updateStatus("belum_dibayar", { clearReceipt: true }, M.rejectSuccess);
   }
 
   return (

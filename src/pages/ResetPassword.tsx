@@ -13,7 +13,7 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { supabase } from "@/integrations/supabase/client";
-import { redirectAfterPasswordChange, setUserPassword } from "@/lib/auth-password";
+import { markPasswordSetupComplete, redirectAfterPasswordChange, setUserPassword } from "@/lib/auth-password";
 import { M } from "@/lib/i18n/messages";
 
 const schema = z
@@ -77,6 +77,12 @@ export default function ResetPasswordPage() {
     const result = await setUserPassword(v.password);
     if (!result.ok) {
       toast.error(`${M.saveFailed}: ${result.error}`);
+      setSaving(false);
+      return;
+    }
+    const setupResult = await markPasswordSetupComplete("changed");
+    if (!setupResult.ok) {
+      toast.error(`${M.saveFailed}: ${setupResult.error}`);
       setSaving(false);
       return;
     }

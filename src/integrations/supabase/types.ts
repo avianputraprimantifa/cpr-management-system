@@ -12,6 +12,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_events: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          recipient_email: string
+          recipient_user_id: string | null
+          related_bill_id: string | null
+          resend_id: string | null
+          status: string
+          subject: string
+          triggered_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          recipient_email: string
+          recipient_user_id?: string | null
+          related_bill_id?: string | null
+          resend_id?: string | null
+          status: string
+          subject: string
+          triggered_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          recipient_email?: string
+          recipient_user_id?: string | null
+          related_bill_id?: string | null
+          resend_id?: string | null
+          status?: string
+          subject?: string
+          triggered_by?: string | null
+        }
+        Relationships: []
+      }
       environment_items: {
         Row: {
           category: Database["public"]["Enums"]["env_category"]
@@ -90,11 +135,15 @@ export type Database = {
           id: string
           name: string
           paid_at: string | null
+          payment_submitted_at: string | null
           period: string
           receipt_path: string | null
+          receipt_thumbnail_path: string | null
           resident_user_id: string
           status: Database["public"]["Enums"]["bill_status"]
           updated_at: string
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
           amount: number
@@ -104,11 +153,15 @@ export type Database = {
           id?: string
           name: string
           paid_at?: string | null
+          payment_submitted_at?: string | null
           period: string
           receipt_path?: string | null
+          receipt_thumbnail_path?: string | null
           resident_user_id: string
           status?: Database["public"]["Enums"]["bill_status"]
           updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
           amount?: number
@@ -118,11 +171,15 @@ export type Database = {
           id?: string
           name?: string
           paid_at?: string | null
+          payment_submitted_at?: string | null
           period?: string
           receipt_path?: string | null
+          receipt_thumbnail_path?: string | null
           resident_user_id?: string
           status?: Database["public"]["Enums"]["bill_status"]
           updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: []
       }
@@ -194,6 +251,9 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          default_password_kept_at: string | null
+          must_reset_password: boolean
+          password_setup_completed_at: string | null
           phone: string | null
           status: Database["public"]["Enums"]["profile_status"]
           updated_at: string
@@ -206,6 +266,9 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          default_password_kept_at?: string | null
+          must_reset_password?: boolean
+          password_setup_completed_at?: string | null
           phone?: string | null
           status?: Database["public"]["Enums"]["profile_status"]
           updated_at?: string
@@ -218,6 +281,9 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          default_password_kept_at?: string | null
+          must_reset_password?: boolean
+          password_setup_completed_at?: string | null
           phone?: string | null
           status?: Database["public"]["Enums"]["profile_status"]
           updated_at?: string

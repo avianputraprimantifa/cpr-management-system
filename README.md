@@ -6,11 +6,8 @@ UI sepenuhnya dalam **Bahasa Indonesia**.
 
 ## Status
 
-- ✅ Schema, RLS policies, GRANTs, storage buckets, dan realtime di Supabase project **Carlton Private Residence Hub** (`egcjdrtncjfkyxqivedt`)
+- ✅ Schema, RLS policies, GRANTs, storage buckets, dan realtime sudah dikonfigurasi di Supabase
 - ✅ Edge Functions `admin-create-user` dan `admin-delete-user` ter-deploy
-- ✅ Akun admin awal:
-  - **Email:** `carltonprivateresidence@gmail.com`
-  - **Password:** `CPRKapitan9!`
 - ✅ Frontend kompilasi bersih (`npm run build`), dev server aktif di `http://localhost:5173/`
 
 ## Menjalankan
@@ -64,9 +61,11 @@ src/
 `.env.local` (gitignored):
 
 ```
-VITE_SUPABASE_URL=https://egcjdrtncjfkyxqivedt.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_Lx2leyxAGmqJwEd0aMUNeg_0ss08hfw
+VITE_SUPABASE_URL=<your-supabase-project-url>
+VITE_SUPABASE_PUBLISHABLE_KEY=<your-supabase-publishable-key>
 ```
+
+Jangan commit `.env.local`, password, access token, service role key, atau kredensial akun pengguna ke repository.
 
 ## Catatan Keamanan
 

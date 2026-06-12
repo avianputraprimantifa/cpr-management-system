@@ -15,9 +15,6 @@ export function UserMenu() {
   const navigate = useNavigate();
   const name = profile?.full_name ?? user?.email ?? "Pengguna";
   const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-  const avatarUrl = typeof user?.user_metadata?.avatar_url === "string"
-    ? user.user_metadata.avatar_url
-    : "";
   const profileAvatarUrl = profile?.avatar_url ?? "";
 
   return (
@@ -25,7 +22,7 @@ export function UserMenu() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-9 gap-2 px-2">
           <Avatar className="h-7 w-7">
-            {(profileAvatarUrl || avatarUrl) && <AvatarImage src={profileAvatarUrl || avatarUrl} alt={name} />}
+            {profileAvatarUrl && <AvatarImage src={profileAvatarUrl} alt={name} />}
             <AvatarFallback className="bg-primary text-primary-foreground text-xs">
               {initials || "?"}
             </AvatarFallback>

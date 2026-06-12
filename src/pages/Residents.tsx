@@ -71,7 +71,7 @@ function satpamPhotoErrorMessage(error: unknown) {
 }
 
 export default function ResidentsPage() {
-  const { user, hasRole } = useAuth();
+  const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
   const canManageSatpamPhoto = hasRole("admin", "pengurus");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -83,9 +83,6 @@ export default function ResidentsPage() {
   const [satpamPhotoFile, setSatpamPhotoFile] = useState<File | null>(null);
   const [satpamPhotoBusy, setSatpamPhotoBusy] = useState(false);
   const satpamPhotoInputRef = useRef<HTMLInputElement>(null);
-  const currentUserAvatarUrl = typeof user?.user_metadata?.avatar_url === "string"
-    ? user.user_metadata.avatar_url
-    : "";
 
   const q = useQuery({
     queryKey: ["residents-list"],
@@ -163,7 +160,7 @@ export default function ResidentsPage() {
     .join("")
     .toUpperCase();
   const viewingIsSatpam = Boolean(viewing?.roles.includes("satpam"));
-  const viewingAvatarUrl = viewing?.avatar_url || (viewing?.user_id === user?.id ? currentUserAvatarUrl : "");
+  const viewingAvatarUrl = viewing?.avatar_url ?? "";
 
   async function saveSatpamPhoto() {
     if (!viewing || !satpamPhotoFile || !viewingIsSatpam || !canManageSatpamPhoto) return;

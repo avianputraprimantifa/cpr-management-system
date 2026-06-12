@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -33,16 +33,13 @@ export default function AccountPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [savedAvatarUrl, setSavedAvatarUrl] = useState<string | null>(null);
   const isSatpam = roles.includes("satpam");
   const needsBlockUnit = !isSatpam;
   const name = profile?.full_name ?? user?.email ?? "Pengguna";
   const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-  const metadataAvatarUrl = typeof user?.user_metadata?.avatar_url === "string"
-    ? user.user_metadata.avatar_url
-    : "";
-  const avatarUrl = photoPreviewUrl ?? savedAvatarUrl ?? profile?.avatar_url ?? metadataAvatarUrl;
+  const photoPreviewUrl = useMemo(() => (photoFile ? URL.createObjectURL(photoFile) : null), [photoFile]);
+  const avatarUrl = photoPreviewUrl ?? savedAvatarUrl ?? profile?.avatar_url ?? "";
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -79,14 +76,9 @@ export default function AccountPage() {
   }, [profile, user, form]);
 
   useEffect(() => {
-    if (!photoFile) {
-      setPhotoPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(photoFile);
-    setPhotoPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photoFile]);
+    if (!photoPreviewUrl) return undefined;
+    return () => URL.revokeObjectURL(photoPreviewUrl);
+  }, [photoPreviewUrl]);
 
   async function onSubmit(v: Values) {
     if (!user) return;
@@ -125,16 +117,6 @@ export default function AccountPage() {
           .eq("user_id", user.id);
         if (profilePhotoError) {
           toast.error(`${M.saveFailed}: ${profilePhotoError.message}`);
-          return;
-        }
-        const { error: avatarError } = await supabase.auth.updateUser({
-          data: {
-            ...user.user_metadata,
-            avatar_url: avatarDataUrl,
-          },
-        });
-        if (avatarError) {
-          toast.error(`${M.saveFailed}: ${avatarError.message}`);
           return;
         }
         setSavedAvatarUrl(avatarDataUrl);

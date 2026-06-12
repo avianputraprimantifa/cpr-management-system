@@ -18,6 +18,14 @@ function valueOrNull(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function normalizeBlockUnit(value: unknown) {
+  if (typeof value !== "string") return null;
+  const prefixed = value.trim().match(/^CPR-(\d{2})$/i);
+  if (prefixed) return `CPR-${prefixed[1]}`;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 2 ? `CPR-${digits.slice(-2)}` : null;
+}
+
 function parsePayload(payload: CreateUserPayload) {
   const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
   const password = typeof payload.password === "string" ? payload.password : "";
@@ -30,13 +38,15 @@ function parsePayload(payload: CreateUserPayload) {
   if (password.length < 8) return { error: "Password minimal 8 karakter." };
   if (!fullName) return { error: "Nama lengkap wajib diisi." };
   if (!role) return { error: "Peran tidak valid. Admin tidak dapat dibuat dari aplikasi." };
+  const blockUnit = role === "satpam" ? null : normalizeBlockUnit(payload.block_unit);
+  if (role !== "satpam" && !blockUnit) return { error: "Blok / Unit wajib berupa CPR- diikuti 2 digit nomor." };
 
   return {
     data: {
       email,
       password,
       full_name: fullName,
-      block_unit: role === "satpam" ? null : valueOrNull(payload.block_unit),
+      block_unit: blockUnit,
       phone: valueOrNull(payload.phone),
       role,
     },

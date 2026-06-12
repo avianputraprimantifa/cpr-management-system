@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { MONTHS_ID, formatShortDateID, periodFromMonthYear } from "@/lib/date";
+import { formatBlockUnit } from "@/lib/block-unit";
 import { formatIDR } from "@/lib/currency";
 import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { BILL_STATUS_LABELS, M } from "@/lib/i18n/messages";
@@ -134,8 +135,8 @@ function exportRows(bills: Bill[], isStaff: boolean) {
       BILL_STATUS_LABELS[bill.status],
       bill.paid_at ? bill.paid_at.slice(0, 10) : "",
     ];
-    return isStaff
-      ? [bill.profiles?.full_name ?? "", bill.profiles?.email ?? "", bill.profiles?.block_unit ?? "", ...common]
+  return isStaff
+      ? [bill.profiles?.full_name ?? "", bill.profiles?.email ?? "", formatBlockUnit(bill.profiles?.block_unit) ?? "", ...common]
       : common;
   });
 
@@ -554,8 +555,8 @@ export default function IplPage() {
                 {isStaff && (
                   <TableCell>
                     <div className="font-medium">{b.profiles?.full_name ?? "—"}</div>
-                    {b.profiles?.block_unit && (
-                      <div className="text-xs text-muted-foreground">{b.profiles.block_unit}</div>
+                    {formatBlockUnit(b.profiles?.block_unit) && (
+                      <div className="text-xs text-muted-foreground">{formatBlockUnit(b.profiles?.block_unit)}</div>
                     )}
                   </TableCell>
                 )}

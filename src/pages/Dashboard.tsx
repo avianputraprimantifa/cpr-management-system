@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth";
 import {
   formatDateID, periodFromMonthYear, currentShiftDate, currentShiftType,
 } from "@/lib/date";
+import { formatBlockUnit } from "@/lib/block-unit";
 import { formatIDR } from "@/lib/currency";
 import {
   BILL_STATUS_LABELS, ENV_CATEGORY_LABELS, ENV_STATUS_LABELS, ROLE_LABELS,
@@ -68,6 +69,7 @@ function DashboardHero({
     { to: "/environment", label: "Lingkungan", icon: Trees },
   ].filter(Boolean) as Array<{ to: string; label: string; icon: LucideIcon }>;
   const roleText = roles.map((role) => ROLE_LABELS[role]).join(", ") || "Pengguna";
+  const displayUnit = formatBlockUnit(unit);
 
   return (
     <section className="home-hero overflow-hidden rounded-lg border border-border/80 p-4 shadow-sm sm:p-5 md:p-6">
@@ -85,10 +87,10 @@ function DashboardHero({
               <CalendarDays className="h-3.5 w-3.5 text-primary" />
               {formatDateID(new Date())}
             </span>
-            {unit && (
+            {displayUnit && (
               <span className="inline-flex min-h-8 items-center gap-2 rounded-md border border-white/70 bg-white/65 px-3 text-xs font-medium text-foreground">
                 <Home className="h-3.5 w-3.5 text-primary" />
-                Unit {unit}
+                Unit {displayUnit}
               </span>
             )}
             <span className="inline-flex min-h-8 items-center gap-2 rounded-md border border-white/70 bg-white/65 px-3 text-xs font-medium text-foreground">

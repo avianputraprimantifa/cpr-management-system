@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { formatBlockUnit } from "@/lib/block-unit";
 import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { ROLE_LABELS, M } from "@/lib/i18n/messages";
 import { formatShortDateID } from "@/lib/date";
@@ -162,6 +163,7 @@ export default function ResidentsPage() {
     .toUpperCase();
   const viewingIsSatpam = Boolean(viewing?.roles.includes("satpam"));
   const viewingAvatarUrl = viewing?.avatar_url ?? "";
+  const viewingBlockUnit = formatBlockUnit(viewing?.block_unit);
 
   async function saveSatpamPhoto() {
     if (!viewing || !satpamPhotoFile || !viewingIsSatpam || !canManageSatpamPhoto) return;
@@ -261,7 +263,7 @@ export default function ResidentsPage() {
                   </button>
                 </div>
               </TableCell>
-              <TableCell>{p.block_unit ?? "—"}</TableCell>
+              <TableCell>{formatBlockUnit(p.block_unit) ?? "—"}</TableCell>
               <TableCell className="space-x-1">
                 {p.roles.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
                 {p.roles.map((r: string) => (
@@ -409,7 +411,7 @@ export default function ResidentsPage() {
                       <Home className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div>
                         <div className="text-xs text-muted-foreground">Blok / Unit</div>
-                        <div>{viewing.block_unit ?? "—"}</div>
+                        <div>{viewingBlockUnit ?? "—"}</div>
                       </div>
                     </div>
                     <div className="flex gap-2">

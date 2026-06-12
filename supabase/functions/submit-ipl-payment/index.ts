@@ -34,6 +34,14 @@ async function activeStaff(admin: ReturnType<typeof createAdminClient>) {
   return (data ?? []).filter((profile) => profile.email);
 }
 
+function formatBlockUnit(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  const prefixed = text.match(/^CPR-(\d{1,2})$/i);
+  if (prefixed) return `CPR-${prefixed[1].padStart(2, "0")}`;
+  const digits = text.replace(/\D/g, "");
+  return digits ? `CPR-${digits.slice(-2).padStart(2, "0")}` : null;
+}
+
 Deno.serve(async (req) => {
   const options = handleOptions(req);
   if (options) return options;
@@ -125,7 +133,7 @@ Deno.serve(async (req) => {
         <p>Pembayaran IPL perlu diverifikasi.</p>
         <ul>
           <li>Penghuni: <strong>${escapeHtml(payer?.full_name ?? "-")}</strong></li>
-          <li>Unit: <strong>${escapeHtml(payer?.block_unit ?? "-")}</strong></li>
+          <li>Unit: <strong>${escapeHtml(formatBlockUnit(payer?.block_unit) ?? "-")}</strong></li>
           <li>Tagihan: <strong>${escapeHtml(bill.name)}</strong></li>
           <li>Jumlah: <strong>${escapeHtml(formatIDR(Number(bill.amount)))}</strong></li>
         </ul>
@@ -139,4 +147,3 @@ Deno.serve(async (req) => {
     return json({ error: (error as Error).message ?? "Kesalahan tidak diketahui." }, 500);
   }
 });
-

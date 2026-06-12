@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { MONTHS_ID, periodFromMonthYear, billNameFromPeriod } from "@/lib/date";
+import { formatBlockUnit } from "@/lib/block-unit";
 import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { M, BILL_STATUS_LABELS } from "@/lib/i18n/messages";
 
@@ -247,7 +248,7 @@ export function BillFormDialog({
                     )}
                     {residentsQ.data?.map((r) => (
                       <SelectItem key={r.user_id} value={r.user_id}>
-                        {r.full_name ?? "Tanpa Nama"}{r.block_unit ? ` — ${r.block_unit}` : ""}
+                        {r.full_name ?? "Tanpa Nama"}{formatBlockUnit(r.block_unit) ? ` — ${formatBlockUnit(r.block_unit)}` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

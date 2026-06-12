@@ -9,12 +9,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BlockUnitInput } from "@/components/ui/block-unit-input";
 import { FileUploadButton } from "@/components/ui/file-upload-button";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription,
 } from "@/components/ui/form";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { blockUnitInputDigits, formatBlockUnit, normalizeBlockUnit } from "@/lib/block-unit";
 import { M, ROLE_LABELS } from "@/lib/i18n/messages";
 import { toProfilePhotoDataUrl } from "@/lib/profile-photo";
 import { ACCEPT_IMAGES } from "@/lib/upload-file";
@@ -40,6 +42,7 @@ export default function AccountPage() {
   const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
   const photoPreviewUrl = useMemo(() => (photoFile ? URL.createObjectURL(photoFile) : null), [photoFile]);
   const avatarUrl = photoPreviewUrl ?? savedAvatarUrl ?? profile?.avatar_url ?? "";
+  const displayBlockUnit = formatBlockUnit(profile?.block_unit);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -69,7 +72,7 @@ export default function AccountPage() {
     if (!profile && !user) return;
     form.reset({
       full_name: profile?.full_name ?? "",
-      block_unit: profile?.block_unit ?? "",
+      block_unit: blockUnitInputDigits(profile?.block_unit),
       phone: profile?.phone ?? "",
       email: profile?.email ?? user?.email ?? "",
     });
@@ -82,6 +85,11 @@ export default function AccountPage() {
 
   async function onSubmit(v: Values) {
     if (!user) return;
+    const blockUnit = needsBlockUnit ? normalizeBlockUnit(v.block_unit) : null;
+    if (needsBlockUnit && !blockUnit) {
+      form.setError("block_unit", { message: "Masukkan 2 digit nomor unit." });
+      return;
+    }
 
     const currentEmail = user.email ?? "";
     if (v.email.trim() !== currentEmail) {
@@ -97,7 +105,7 @@ export default function AccountPage() {
       .from("profiles")
       .update({
         full_name: v.full_name.trim(),
-        block_unit: needsBlockUnit ? (v.block_unit?.trim() || null) : null,
+        block_unit: blockUnit,
         phone: v.phone?.trim() || null,
         email: v.email.trim(),
       })
@@ -168,7 +176,7 @@ export default function AccountPage() {
                   <div className="mt-2 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
                     <span>{profile?.email ?? user?.email ?? "—"}</span>
                     <span>{profile?.phone ?? "No. HP belum diisi"}</span>
-                    {needsBlockUnit && <span>Unit {profile?.block_unit ?? "belum diisi"}</span>}
+                    {needsBlockUnit && <span>Unit {displayBlockUnit ?? "belum diisi"}</span>}
                   </div>
                 </div>
                 <FileUploadButton
@@ -206,7 +214,15 @@ export default function AccountPage() {
                   <FormField control={form.control} name="block_unit" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Blok / Unit</FormLabel>
-                      <FormControl><Input placeholder="mis. A-12" {...field} /></FormControl>
+                      <FormControl>
+                        <BlockUnitInput
+                          name={field.name}
+                          ref={field.ref}
+                          value={field.value}
+                          onBlur={field.onBlur}
+                          onValueChange={field.onChange}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
+import { formatBlockUnit } from "@/lib/block-unit";
 import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { BILL_STATUS_LABELS, M } from "@/lib/i18n/messages";
 import { formatIDR } from "@/lib/currency";
@@ -147,7 +148,9 @@ export default function IplVerifyPage() {
               <div>
                 <dt className="text-xs text-muted-foreground">Penghuni</dt>
                 <dd className="font-medium">{q.data.profile?.full_name ?? "—"}</dd>
-                <dd className="text-xs text-muted-foreground">{q.data.profile?.block_unit ?? q.data.profile?.email ?? "—"}</dd>
+                <dd className="text-xs text-muted-foreground">
+                  {formatBlockUnit(q.data.profile?.block_unit) ?? q.data.profile?.email ?? "—"}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Jumlah</dt>

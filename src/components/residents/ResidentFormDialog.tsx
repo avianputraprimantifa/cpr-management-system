@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BlockUnitInput } from "@/components/ui/block-unit-input";
 import { PasswordInput } from "@/components/ui/password-input";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { blockUnitInputDigits, normalizeBlockUnit } from "@/lib/block-unit";
 import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { M, ROLE_LABELS } from "@/lib/i18n/messages";
 
@@ -93,7 +95,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
         email: "",
         password: "",
         full_name: resident.full_name ?? "",
-        block_unit: resident.block_unit ?? "",
+        block_unit: blockUnitInputDigits(resident.block_unit),
         phone: resident.phone ?? "",
         role: "penghuni",
       });
@@ -105,16 +107,22 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resident, open]);
 
-  // When admin switches role to satpam, clear any stale Blok/Unit so it isn't submitted.
+  // When staff switches role to satpam, clear any stale Blok/Unit so it isn't submitted.
   useEffect(() => {
     if (!isEdit && selectedRole === "satpam") form.setValue("block_unit", "");
   }, [selectedRole, isEdit, form]);
 
   async function onSubmit(v: ResidentFormValues) {
+    const blockUnit = needsBlockUnit ? normalizeBlockUnit(v.block_unit) : null;
+    if (needsBlockUnit && !blockUnit) {
+      form.setError("block_unit", { message: "Masukkan 2 digit nomor unit." });
+      return;
+    }
+
     if (isEdit) {
       const { error } = await supabase.from("profiles").update({
         full_name: v.full_name,
-        block_unit: needsBlockUnit ? (v.block_unit || null) : null,
+        block_unit: blockUnit,
         phone: v.phone || null,
       }).eq("user_id", resident.user_id);
       if (error) { toast.error(`${M.saveFailed}: ${error.message}`); return; }
@@ -123,7 +131,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
       if (!canCreateAccounts) { toast.error(M.unauthorized); return; }
       const payload = {
         ...v,
-        block_unit: needsBlockUnit ? (v.block_unit?.trim() || null) : null,
+        block_unit: blockUnit,
         phone: v.phone?.trim() || null,
       };
       const { data, error } = await supabase.functions.invoke("admin-create-user", { body: payload });
@@ -196,7 +204,15 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
                 <FormField control={form.control} name="block_unit" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Blok / Unit</FormLabel>
-                    <FormControl><Input placeholder="A1 / 12" {...field} /></FormControl>
+                    <FormControl>
+                      <BlockUnitInput
+                        name={field.name}
+                        ref={field.ref}
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onValueChange={field.onChange}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />

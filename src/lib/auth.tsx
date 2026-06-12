@@ -1,8 +1,20 @@
 import {
-  createContext, useContext, useEffect, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  clearSessionTracking,
+  removeLegacyAuthLocalStorage,
+  resetSessionTracking,
+  SESSION_ACTIVITY_THROTTLE_MS,
+  SESSION_CHECK_INTERVAL_MS,
+  sessionExpirationMessage,
+  sessionExpirationReason,
+  startSessionTracking,
+  touchSessionActivity,
+} from "@/lib/session-security";
 
 export type AppRole = "admin" | "pengurus" | "penghuni" | "satpam";
 
@@ -51,6 +63,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const lastActivityWriteRef = useRef(0);
+
+  const clearAuthState = useCallback(() => {
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setRoles([]);
+  }, []);
+
+  const signOutSafely = useCallback(async () => {
+    clearSessionTracking();
+    clearAuthState();
+    await supabase.auth.signOut();
+  }, [clearAuthState]);
+
+  const expireSession = useCallback(async (reason: "idle" | "max_age") => {
+    toast.info(sessionExpirationMessage(reason));
+    await signOutSafely();
+  }, [signOutSafely]);
 
   async function loadProfileAndRoles(uid: string) {
     const [{ data: p }, { data: r }] = await Promise.all([
@@ -63,16 +94,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    removeLegacyAuthLocalStorage();
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
+      if (data.session) {
+        startSessionTracking(data.session);
+        const reason = sessionExpirationReason();
+        if (reason) {
+          await expireSession(reason);
+          if (mounted) setIsLoading(false);
+          return;
+        }
+      }
       setSession(data.session);
       setUser(data.session?.user ?? null);
       if (data.session?.user) await loadProfileAndRoles(data.session.user.id);
       setIsLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (s) {
+        if (event === "SIGNED_IN") resetSessionTracking(s);
+        else startSessionTracking(s);
+      } else {
+        clearSessionTracking();
+      }
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
@@ -80,12 +127,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           void loadProfileAndRoles(s.user.id);
         }, 0);
       } else {
-        setProfile(null); setRoles([]);
+        setProfile(null);
+        setRoles([]);
       }
     });
 
     return () => { mounted = false; sub.subscription.unsubscribe(); };
-  }, []);
+  }, [expireSession]);
+
+  useEffect(() => {
+    if (!session) return undefined;
+
+    const activityEvents = ["pointerdown", "keydown", "touchstart", "scroll"] as const;
+    const recordActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityWriteRef.current < SESSION_ACTIVITY_THROTTLE_MS) return;
+      lastActivityWriteRef.current = now;
+      touchSessionActivity();
+    };
+    const recordVisibleActivity = () => {
+      if (document.visibilityState === "visible") recordActivity();
+    };
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, recordActivity, { passive: true });
+    });
+    window.addEventListener("focus", recordActivity);
+    document.addEventListener("visibilitychange", recordVisibleActivity);
+
+    return () => {
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, recordActivity);
+      });
+      window.removeEventListener("focus", recordActivity);
+      document.removeEventListener("visibilitychange", recordVisibleActivity);
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return undefined;
+
+    const checkSession = () => {
+      const reason = sessionExpirationReason();
+      if (reason) void expireSession(reason);
+    };
+
+    checkSession();
+    const intervalId = window.setInterval(checkSession, SESSION_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [expireSession, session]);
+
+  useEffect(() => {
+    if (profile?.status !== "nonaktif") return undefined;
+    const timeoutId = window.setTimeout(() => {
+      toast.error("Akun Anda sedang nonaktif. Hubungi admin untuk mengaktifkan kembali.");
+      void signOutSafely();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [profile?.status, signOutSafely]);
 
   const value = useMemo<AuthCtx>(() => ({
     user, session, profile, roles, isLoading,
@@ -104,14 +203,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
     },
-    signOut: async () => { await supabase.auth.signOut(); },
+    signOut: signOutSafely,
     hasRole: (...rs) => rs.some((r) => roles.includes(r)),
     refreshProfile: async () => { if (user) await loadProfileAndRoles(user.id); },
-  }), [user, session, profile, roles, isLoading]);
+  }), [user, session, profile, roles, isLoading, signOutSafely]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");

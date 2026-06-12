@@ -24,10 +24,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatBlockUnit } from "@/lib/block-unit";
 import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
-import { ROLE_LABELS, M } from "@/lib/i18n/messages";
+import { M } from "@/lib/i18n/messages";
 import { formatShortDateID } from "@/lib/date";
 import { toProfilePhotoDataUrl } from "@/lib/profile-photo";
 import { ACCEPT_IMAGES, isRasterImageFile } from "@/lib/upload-file";
+import { RoleBadge } from "@/components/RoleBadge";
 import { ResidentFormDialog } from "@/components/residents/ResidentFormDialog";
 
 type StatusFilter = "all" | "aktif" | "nonaktif";
@@ -264,11 +265,13 @@ export default function ResidentsPage() {
                 </div>
               </TableCell>
               <TableCell>{formatBlockUnit(p.block_unit) ?? "—"}</TableCell>
-              <TableCell className="space-x-1">
+              <TableCell>
+                <div className="flex min-w-[6.5rem] flex-wrap items-center gap-1.5">
                 {p.roles.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
                 {p.roles.map((r: string) => (
-                  <Badge key={r} variant="outline">{ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}</Badge>
+                  <RoleBadge key={r} role={r} />
                 ))}
+                </div>
               </TableCell>
               <TableCell>
                 <div className="text-sm">{p.email}</div>
@@ -373,12 +376,12 @@ export default function ResidentsPage() {
                     <div className="text-xl font-semibold">{viewingName}</div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {viewing.roles.length === 0 && (
-                        <Badge variant="outline">Tanpa Peran</Badge>
+                        <Badge variant="outline" className="min-w-[6.5rem] justify-center px-3 py-1">
+                          Tanpa Peran
+                        </Badge>
                       )}
                       {viewing.roles.map((r: string) => (
-                        <Badge key={r} variant="outline">
-                          {ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}
-                        </Badge>
+                        <RoleBadge key={r} role={r} />
                       ))}
                       <Badge variant="outline" className={
                         viewing.status === "aktif"

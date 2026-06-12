@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { ROLE_LABELS, M } from "@/lib/i18n/messages";
 import { formatShortDateID } from "@/lib/date";
 import { toProfilePhotoDataUrl } from "@/lib/profile-photo";
@@ -136,7 +137,7 @@ export default function ResidentsPage() {
     });
     const result = data as AdminDeleteResponse | null;
     if (error || result?.error) {
-      toast.error(result?.error ?? error?.message ?? M.deleteFailed);
+      toast.error(result?.error ?? edgeFunctionErrorMessage(error, "admin-delete-user", M.deleteFailed));
       return;
     }
     toast.success(M.deleteSuccess);

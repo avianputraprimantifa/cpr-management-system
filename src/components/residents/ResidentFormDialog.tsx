@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
 import { M, ROLE_LABELS } from "@/lib/i18n/messages";
 
 const createSchema = z.object({
@@ -35,10 +36,33 @@ const editSchema = z.object({
   phone: z.string().optional(),
 });
 
+type ResidentRole = "admin" | "pengurus" | "penghuni" | "satpam";
+type ResidentFormValues = {
+  email: string;
+  password: string;
+  full_name: string;
+  block_unit: string;
+  phone: string;
+  role: ResidentRole;
+};
+type ResidentFormResident = {
+  user_id: string;
+  full_name: string | null;
+  block_unit: string | null;
+  phone: string | null;
+  roles: string[];
+};
+type AdminCreateUserResponse = {
+  error?: string;
+  user_id?: string;
+  email?: string;
+  role?: ResidentRole;
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  resident: any | null;
+  resident: ResidentFormResident | null;
   onSaved: () => void;
 }
 
@@ -49,23 +73,26 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
   const schema = isEdit ? editSchema : createSchema;
   const editingIsSatpam = isEdit && Array.isArray(resident?.roles) && resident.roles.includes("satpam");
 
-  const form = useForm<any>({
-    resolver: zodResolver(schema as any),
+  const form = useForm<ResidentFormValues>({
+    resolver: zodResolver(schema) as Resolver<ResidentFormValues>,
     defaultValues: {
       email: "", password: "", full_name: "", block_unit: "", phone: "", role: "penghuni",
     },
   });
 
-  const selectedRole = form.watch("role") as "admin" | "pengurus" | "penghuni" | "satpam" | undefined;
+  const selectedRole = useWatch({ control: form.control, name: "role" });
   // Hide Blok/Unit for satpam (they work here, not live here).
   const needsBlockUnit = isEdit ? !editingIsSatpam : selectedRole !== "satpam";
 
   useEffect(() => {
     if (isEdit && resident) {
       form.reset({
+        email: "",
+        password: "",
         full_name: resident.full_name ?? "",
         block_unit: resident.block_unit ?? "",
         phone: resident.phone ?? "",
+        role: "penghuni",
       });
     } else {
       form.reset({
@@ -80,7 +107,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
     if (!isEdit && selectedRole === "satpam") form.setValue("block_unit", "");
   }, [selectedRole, isEdit, form]);
 
-  async function onSubmit(v: any) {
+  async function onSubmit(v: ResidentFormValues) {
     if (isEdit) {
       const { error } = await supabase.from("profiles").update({
         full_name: v.full_name,
@@ -97,8 +124,9 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
         phone: v.phone?.trim() || null,
       };
       const { data, error } = await supabase.functions.invoke("admin-create-user", { body: payload });
-      if (error || (data as any)?.error) {
-        toast.error((data as any)?.error ?? error?.message ?? M.saveFailed);
+      const result = data as AdminCreateUserResponse | null;
+      if (error || result?.error) {
+        toast.error(result?.error ?? edgeFunctionErrorMessage(error, "admin-create-user", M.saveFailed));
         return;
       }
       toast.success(M.saveSuccess);

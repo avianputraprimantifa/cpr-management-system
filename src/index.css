@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 68 36% 96%;
+    --foreground: 120 42% 10%;
+
+    --card: 54 45% 98%;
+    --card-foreground: 120 42% 10%;
+
+    --popover: 54 45% 98%;
+    --popover-foreground: 120 42% 10%;
+
+    --primary: 132 83% 19%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 82 36% 89%;
+    --secondary-foreground: 120 75% 13%;
+
+    --muted: 70 28% 91%;
+    --muted-foreground: 91 20% 34%;
+
+    --accent: 60 86% 88%;
+    --accent-foreground: 120 50% 12%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 120 50% 26%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 48 92% 24%;
+    --warning-foreground: 120 50% 8%;
+
+    --border: 72 23% 81%;
+    --input: 72 23% 81%;
+    --ring: 48 92% 24%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 70 35% 94%;
+    --sidebar-foreground: 120 50% 12%;
+    --sidebar-primary: 132 83% 19%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 60 86% 88%;
+    --sidebar-accent-foreground: 120 50% 12%;
+    --sidebar-border: 72 23% 81%;
+    --sidebar-ring: 48 92% 24%;
+  }
+
+  .dark {
+    --background: 120 50% 6%;
+    --foreground: 210 20% 96%;
+
+    --card: 120 43% 9%;
+    --card-foreground: 210 20% 96%;
+
+    --popover: 120 43% 9%;
+    --popover-foreground: 210 20% 96%;
+
+    --primary: 60 92% 47%;
+    --primary-foreground: 120 50% 8%;
+
+    --secondary: 120 35% 15%;
+    --secondary-foreground: 210 20% 96%;
+
+    --muted: 120 30% 14%;
+    --muted-foreground: 82 16% 70%;
+
+    --accent: 82 42% 20%;
+    --accent-foreground: 60 86% 88%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 120 50% 32%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 60 92% 47%;
+    --warning-foreground: 120 50% 8%;
+
+    --border: 120 24% 20%;
+    --input: 120 24% 20%;
+    --ring: 60 92% 47%;
+
+    --sidebar-background: 120 43% 8%;
+    --sidebar-foreground: 82 22% 88%;
+    --sidebar-primary: 60 92% 47%;
+    --sidebar-primary-foreground: 120 50% 8%;
+    --sidebar-accent: 82 42% 20%;
+    --sidebar-accent-foreground: 60 86% 88%;
+    --sidebar-border: 120 24% 20%;
+    --sidebar-ring: 60 92% 47%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .app-shell {
+    background:
+      linear-gradient(180deg, hsl(68 36% 96%) 0%, hsl(82 34% 95%) 46%, hsl(54 45% 98%) 100%);
+  }
+
+  .home-hero {
+    background:
+      linear-gradient(90deg, hsl(60 86% 88% / 0.84) 0%, hsl(82 36% 89% / 0.78) 52%, hsl(132 30% 90% / 0.82) 100%),
+      linear-gradient(180deg, hsl(54 45% 98% / 0.18) 0%, hsl(120 50% 8% / 0.12) 100%),
+      url("./assets/carlton-house.webp");
+    background-position: center 58%;
+    background-size: cover;
+  }
+
+  .login-shell {
+    background:
+      linear-gradient(145deg, hsl(68 36% 96%) 0%, hsl(82 36% 89%) 48%, hsl(132 30% 91%) 100%);
+  }
+
+  .status-warning-soft {
+    background-color: hsl(60 92% 47% / 0.16) !important;
+    border-color: hsl(60 92% 47% / 0.34) !important;
+    color: hsl(var(--warning));
+  }
+}

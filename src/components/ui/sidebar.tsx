@@ -1,7 +1,8 @@
 import * as React from "react";
+/* eslint-disable react-refresh/only-export-components */
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-import { PanelLeft } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -208,7 +209,7 @@ export const SidebarTrigger = React.forwardRef<
       }}
       {...props}
     >
-      <PanelLeft />
+      <Menu className="h-5 w-5" />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   );
@@ -220,7 +221,7 @@ export const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProp
     <main
       ref={ref}
       className={cn(
-        "relative flex min-h-svh flex-1 flex-col bg-background",
+        "relative flex min-h-svh min-w-0 flex-1 flex-col bg-background",
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         className
       )}
@@ -278,7 +279,7 @@ export const SidebarGroupLabel = React.forwardRef<
   const Comp = asChild ? Slot : "div";
   return (
     <Comp
-      ref={ref as any}
+      ref={ref as React.Ref<HTMLDivElement>}
       data-sidebar="group-label"
       className={cn(
         "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opacity] duration-300 ease-in-out focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
@@ -343,7 +344,7 @@ export const SidebarMenuButton = React.forwardRef<
   const { isMobile, state } = useSidebar();
   const btn = (
     <Comp
-      ref={ref as any}
+      ref={ref as React.Ref<HTMLButtonElement>}
       data-sidebar="menu-button"
       data-size={size}
       data-active={isActive}

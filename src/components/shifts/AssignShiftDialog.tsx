@@ -26,11 +26,16 @@ const schema = z.object({
   notes: z.string().optional(),
 });
 type Values = z.infer<typeof schema>;
+type ShiftAssignment = {
+  id: string;
+  guard_user_id: string;
+  notes: string | null;
+};
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  slot: { date: string; type: "pagi" | "malam"; existing: any | null } | null;
+  slot: { date: string; type: "pagi" | "malam"; existing: ShiftAssignment | null } | null;
   onSaved: () => void;
   selfOnly?: boolean;
 }
@@ -81,7 +86,7 @@ export function AssignShiftDialog({ open, onOpenChange, slot, onSaved, selfOnly 
       ? await supabase.from("guard_shifts").update(payload).eq("id", slot.existing.id)
       : await supabase.from("guard_shifts").insert(payload);
     if (res.error) {
-      if ((res.error as any).code === "23505") {
+      if (res.error.code === "23505") {
         toast.error("Slot ini sudah terisi. Muat ulang halaman dan coba lagi.");
       } else {
         toast.error(`${M.saveFailed}: ${res.error.message}`);
@@ -105,7 +110,7 @@ export function AssignShiftDialog({ open, onOpenChange, slot, onSaved, selfOnly 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{selfOnly ? "Tugaskan Diri Sendiri" : "Tugaskan Satpam"}</DialogTitle>
           {slot && (
@@ -145,7 +150,7 @@ export function AssignShiftDialog({ open, onOpenChange, slot, onSaved, selfOnly 
                 <FormMessage />
               </FormItem>
             )} />
-            <DialogFooter className="gap-2 sm:gap-2">
+            <DialogFooter className="gap-2 sm:gap-2 [&>button]:w-full sm:[&>button]:w-auto">
               {slot?.existing && (
                 <Button type="button" variant="destructive" onClick={onDelete}>Hapus</Button>
               )}

@@ -77,7 +77,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Notifikasi</h1>
           <p className="text-sm text-muted-foreground">
@@ -85,7 +85,7 @@ export default function NotificationsPage() {
           </p>
         </div>
         {unread > 0 && (
-          <Button variant="outline" onClick={markAll}>
+          <Button variant="outline" className="w-full sm:w-auto" onClick={markAll}>
             <CheckCheck className="mr-2 h-4 w-4" /> Tandai semua dibaca
           </Button>
         )}
@@ -114,7 +114,7 @@ export default function NotificationsPage() {
                     className={`cursor-pointer transition-colors ${!n.read ? "border-primary/40 bg-primary/5" : ""}`}
                     onClick={() => !n.read && markRead(n.id)}
                   >
-                    <CardContent className="py-3 flex gap-3">
+                    <CardContent className="flex gap-3 py-3">
                       <div className="mt-1">
                         <span
                           className={`inline-block h-2 w-2 rounded-full ${!n.read ? "bg-primary" : "bg-muted-foreground/30"}`}

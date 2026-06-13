@@ -20,7 +20,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { blockUnitInputDigits, normalizeBlockUnit } from "@/lib/block-unit";
-import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
+import { edgeFunctionErrorMessageAsync } from "@/lib/edge-function-error";
 import { M, ROLE_LABELS } from "@/lib/i18n/messages";
 
 const createSchema = z.object({
@@ -137,7 +137,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
       const { data, error } = await supabase.functions.invoke("admin-create-user", { body: payload });
       const result = data as AdminCreateUserResponse | null;
       if (error || result?.error) {
-        toast.error(result?.error ?? edgeFunctionErrorMessage(error, "admin-create-user", M.saveFailed));
+        toast.error(result?.error ?? await edgeFunctionErrorMessageAsync(error, "admin-create-user", M.saveFailed));
         return;
       }
       toast.success(M.saveSuccess);
@@ -199,7 +199,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
                 <FormMessage />
               </FormItem>
             )} />
-            <div className={needsBlockUnit ? "grid grid-cols-2 gap-3" : ""}>
+            <div className={needsBlockUnit ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : ""}>
               {needsBlockUnit && (
                 <FormField control={form.control} name="block_unit" render={({ field }) => (
                   <FormItem>
@@ -226,7 +226,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }: Pr
               )} />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-2 [&>button]:w-full sm:[&>button]:w-auto">
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Batal</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

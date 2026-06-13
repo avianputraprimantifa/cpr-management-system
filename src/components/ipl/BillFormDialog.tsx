@@ -19,7 +19,13 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { MONTHS_ID, periodFromMonthYear, billNameFromPeriod } from "@/lib/date";
 import { formatBlockUnit } from "@/lib/block-unit";
-import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
+import { edgeFunctionErrorMessageAsync } from "@/lib/edge-function-error";
+import {
+  createIplBills,
+  updateIplBillStatus,
+  type CreateIplBillsResponse,
+  type UpdateIplBillStatusResponse,
+} from "@/lib/ipl-bill-actions";
 import { M, BILL_STATUS_LABELS } from "@/lib/i18n/messages";
 
 const ALL_VALUE = "__all__";
@@ -42,15 +48,6 @@ type EditableBill = {
   period: string;
   status: Values["status"];
 };
-type CreateIplBillsResponse = {
-  created?: number;
-  skipped?: number;
-  failed?: number;
-  errors?: string[];
-  period?: string;
-  error?: string;
-};
-
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -157,15 +154,13 @@ export function BillFormDialog({
     };
 
     if (!isEdit) {
-      const { data, error } = await supabase.functions.invoke("create-ipl-bills", {
-        body: {
-          ...basePayload,
-          resident_user_id: isBulk ? ALL_VALUE : v.resident_user_id,
-        },
+      const { data, error } = await createIplBills({
+        ...basePayload,
+        resident_user_id: isBulk ? ALL_VALUE : v.resident_user_id,
       });
       const result = data as CreateIplBillsResponse | null;
       if (error || result?.error) {
-        toast.error(result?.error ?? edgeFunctionErrorMessage(error, "create-ipl-bills", M.saveFailed));
+        toast.error(result?.error ?? await edgeFunctionErrorMessageAsync(error, "create-ipl-bills", M.saveFailed));
         return;
       }
 
@@ -200,12 +195,13 @@ export function BillFormDialog({
     }
 
     if (bill.status !== v.status) {
-      const { data, error } = await supabase.functions.invoke("update-ipl-bill-status", {
-        body: { bill_id: bill.id, status: v.status },
+      const { data, error } = await updateIplBillStatus({
+        bill_id: bill.id,
+        status: v.status,
       });
-      const result = data as CreateIplBillsResponse | null;
+      const result = data as UpdateIplBillStatusResponse | null;
       if (error || result?.error) {
-        toast.error(result?.error ?? edgeFunctionErrorMessage(error, "update-ipl-bill-status", M.saveFailed));
+        toast.error(result?.error ?? await edgeFunctionErrorMessageAsync(error, "update-ipl-bill-status", M.saveFailed));
         return;
       }
     }
@@ -263,7 +259,7 @@ export function BillFormDialog({
               </FormItem>
             )} />
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FormField control={form.control} name="month" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Bulan</FormLabel>
@@ -297,7 +293,7 @@ export function BillFormDialog({
               <Input value={previewName} readOnly disabled className="mt-2" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FormField control={form.control} name="amount" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Jumlah (Rp)</FormLabel>
@@ -329,7 +325,7 @@ export function BillFormDialog({
               </FormItem>
             )} />
 
-            <DialogFooter className="gap-2 sm:gap-2">
+            <DialogFooter className="gap-2 sm:gap-2 [&>button]:w-full sm:[&>button]:w-auto">
               {isEdit && (
                 <Button type="button" variant="destructive" onClick={onDelete}>Hapus</Button>
               )}

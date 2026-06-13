@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { markPasswordSetupComplete, redirectAfterPasswordChange, setUserPassword } from "@/lib/auth-password";
 import { useAuth } from "@/lib/auth";
 import { buildRecoveryEmailPreview, type RecoveryEmailPreview } from "@/lib/recovery-email-preview";
+import { edgeFunctionErrorMessageAsync } from "@/lib/edge-function-error";
 import { M } from "@/lib/i18n/messages";
 
 export default function AccountPasswordPage() {
@@ -40,7 +41,7 @@ export default function AccountPasswordPage() {
       });
       setBusy(false);
       if (error || (data as { error?: string })?.error) {
-        toast.error((data as { error?: string })?.error ?? error?.message ?? M.saveFailed);
+        toast.error((data as { error?: string })?.error ?? await edgeFunctionErrorMessageAsync(error, "dev-recovery-preview", M.saveFailed));
         return;
       }
       const link = (data as { action_link: string }).action_link;

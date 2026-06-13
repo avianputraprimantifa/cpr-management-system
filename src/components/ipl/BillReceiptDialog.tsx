@@ -5,8 +5,9 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
+import { edgeFunctionErrorMessageAsync } from "@/lib/edge-function-error";
+import { updateIplBillStatus, type UpdateIplBillStatusResponse } from "@/lib/ipl-bill-actions";
+import { getPaymentReceiptSignedUrl } from "@/lib/payment-receipt-url";
 import { M } from "@/lib/i18n/messages";
 import { formatIDR } from "@/lib/currency";
 
@@ -18,10 +19,6 @@ type ReceiptBill = {
   status: "belum_dibayar" | "dalam_pengecekan" | "lunas";
   receipt_path: string | null;
 };
-type UpdateBillStatusResponse = {
-  error?: string;
-};
-
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -38,15 +35,15 @@ export function BillReceiptDialog({ open, onOpenChange, bill, onActionDone }: Pr
   useEffect(() => {
     if (!receiptPath) return undefined;
     let active = true;
-    supabase.storage.from("payment-receipts")
-      .createSignedUrl(receiptPath, 60)
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) { toast.error(error.message); return; }
-        setSignedReceipt({ path: receiptPath, url: data.signedUrl });
+    getPaymentReceiptSignedUrl(bill?.id ?? "", "receipt", receiptPath, 300)
+      .then((signedUrl) => {
+        if (active) setSignedReceipt({ path: receiptPath, url: signedUrl });
+      })
+      .catch((error) => {
+        if (active) toast.error((error as Error).message);
       });
     return () => { active = false; };
-  }, [receiptPath]);
+  }, [bill?.id, receiptPath]);
 
   const isPdf = bill?.receipt_path?.toLowerCase().endsWith(".pdf");
 
@@ -57,17 +54,15 @@ export function BillReceiptDialog({ open, onOpenChange, bill, onActionDone }: Pr
   ) {
     if (!bill) return;
     setBusy(true);
-    const { data, error } = await supabase.functions.invoke("update-ipl-bill-status", {
-      body: {
-        bill_id: bill.id,
-        status,
-        clear_receipt: options.clearReceipt ?? false,
-      },
+    const { data, error } = await updateIplBillStatus({
+      bill_id: bill.id,
+      status,
+      clear_receipt: options.clearReceipt ?? false,
     });
-    const result = data as UpdateBillStatusResponse | null;
+    const result = data as UpdateIplBillStatusResponse | null;
     setBusy(false);
     if (error || result?.error) {
-      toast.error(result?.error ?? edgeFunctionErrorMessage(error, "update-ipl-bill-status", M.saveFailed));
+      toast.error(result?.error ?? await edgeFunctionErrorMessageAsync(error, "update-ipl-bill-status", M.saveFailed));
       return;
     }
     toast.success(successMessage);

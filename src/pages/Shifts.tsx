@@ -77,16 +77,18 @@ export default function ShiftsPage() {
         <p className="text-sm text-muted-foreground">Atur jadwal shift Pagi & Malam.</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[auto_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[auto_1fr] lg:gap-6">
         <Card>
           <CardHeader><CardTitle className="text-base">Pilih Tanggal</CardTitle></CardHeader>
-          <CardContent>
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={(d) => d && setDate(d)}
-              initialFocus
-            />
+          <CardContent className="overflow-x-auto">
+            <div className="mx-auto w-fit max-w-full">
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={(d) => d && setDate(d)}
+                initialFocus
+              />
+            </div>
             <p className="mt-3 text-xs text-muted-foreground">{formatDateID(date)}</p>
           </CardContent>
         </Card>
@@ -169,9 +171,9 @@ function SlotCard({
 }) {
   return (
     <Card className={mine ? "bg-success/10 border-success/30" : ""}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-base flex items-center gap-2">{icon} {label}</CardTitle>
-        {action}
+      <CardHeader className="flex flex-col gap-3 space-y-0 pb-2 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle className="flex items-center gap-2 text-base">{icon} {label}</CardTitle>
+        {action && <div className="w-full sm:w-auto [&>button]:w-full sm:[&>button]:w-auto">{action}</div>}
       </CardHeader>
       <CardContent>
         {shift ? (

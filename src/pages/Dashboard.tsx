@@ -64,7 +64,7 @@ function DashboardHero({
   isStaff: boolean;
 }) {
   const quickLinks = [
-    isResident ? { to: "/ipl", label: "Tagihan IPL", icon: Receipt } : null,
+    isResident ? { to: "/ipl?view=mine", label: "Tagihan IPL", icon: Receipt } : null,
     isStaff ? { to: "/residents", label: "Penghuni", icon: Users } : null,
     { to: "/environment", label: "Lingkungan", icon: Trees },
   ].filter(Boolean) as Array<{ to: string; label: string; icon: LucideIcon }>;
@@ -99,13 +99,13 @@ function DashboardHero({
             </span>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 lg:justify-end">
+        <div className="grid w-full gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:flex-wrap lg:justify-end">
           {quickLinks.map(({ to, label, icon: Icon }) => (
             <Button
               key={to}
               asChild
               variant="secondary"
-              className="h-9 border border-white/70 bg-white/80 px-3 hover:bg-white"
+              className="h-10 justify-start border border-white/70 bg-white/80 px-3 hover:bg-white lg:h-9"
             >
               <Link to={to}>
                 <Icon className="mr-2 h-4 w-4" />
@@ -162,7 +162,7 @@ function ResidentBlock({ userId }: { userId: string }) {
             <Skeleton className="h-24 w-full" />
           ) : current.data ? (
             <div className="space-y-3">
-              <div className="flex items-baseline justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
                 <span className="text-sm text-muted-foreground">{current.data.name}</span>
                 <Badge variant="outline" className={statusClass[current.data.status as BillStatus]}>
                   {BILL_STATUS_LABELS[current.data.status as BillStatus]}
@@ -173,7 +173,7 @@ function ResidentBlock({ userId }: { userId: string }) {
                 Jatuh tempo: {formatDateID(current.data.due_date)}
               </div>
               {current.data.status === "belum_dibayar" && (
-                <Button asChild className="w-full"><Link to="/ipl">Bayar Sekarang</Link></Button>
+                <Button asChild className="w-full"><Link to="/ipl?view=mine">Bayar Sekarang</Link></Button>
               )}
             </div>
           ) : (
@@ -188,7 +188,7 @@ function ResidentBlock({ userId }: { userId: string }) {
           <AlertTitle>Tagihan Terlambat</AlertTitle>
           <AlertDescription>
             Anda memiliki {overdue.data.length} tagihan yang sudah melewati jatuh tempo.{" "}
-            <Link to="/ipl" className="underline font-medium">Lihat detail</Link>
+            <Link to="/ipl?view=mine" className="underline font-medium">Lihat detail</Link>
           </AlertDescription>
         </Alert>
       )}
@@ -329,8 +329,8 @@ function StaffStatsBlock() {
         const Icon = c.icon;
         return (
           <Card key={c.label} className="overflow-hidden">
-            <CardHeader className="flex-row items-center justify-between space-y-0 p-4 pb-2 sm:p-5 sm:pb-2">
-              <div>
+            <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 p-4 pb-2 sm:p-5 sm:pb-2">
+              <div className="min-w-0">
                 <CardTitle className="text-sm font-semibold">{c.label}</CardTitle>
                 <p className="mt-1 text-xs text-muted-foreground">{c.helper}</p>
               </div>
@@ -503,7 +503,7 @@ function SatpamExtraBlock({ userId }: { userId: string }) {
               {(["sampah", "kolam_renang"] as const).map((cat) => {
                 const it = envSummary.data?.[cat];
                 return (
-                  <li key={cat} className="flex items-center justify-between">
+                  <li key={cat} className="flex flex-wrap items-center justify-between gap-2">
                     <span>{ENV_CATEGORY_LABELS[cat]}</span>
                     {it ? (
                       <Badge variant="outline">{ENV_STATUS_LABELS[it.status as keyof typeof ENV_STATUS_LABELS]}</Badge>

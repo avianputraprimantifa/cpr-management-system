@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatBlockUnit } from "@/lib/block-unit";
-import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
+import { edgeFunctionErrorMessageAsync } from "@/lib/edge-function-error";
 import { M } from "@/lib/i18n/messages";
 import { formatShortDateID } from "@/lib/date";
 import { toProfilePhotoDataUrl } from "@/lib/profile-photo";
@@ -73,7 +73,7 @@ function satpamPhotoErrorMessage(error: unknown) {
 }
 
 export default function ResidentsPage() {
-  const { hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const isAdmin = hasRole("admin");
   const canCreateAccounts = hasRole("admin", "pengurus");
   const canManageSatpamPhoto = hasRole("admin", "pengurus");
@@ -120,7 +120,41 @@ export default function ResidentsPage() {
     },
   });
 
+  function isAdminAccount(p: ResidentRow) {
+    return p.roles.includes("admin");
+  }
+
+  function isCurrentUser(p: ResidentRow) {
+    return p.user_id === user?.id;
+  }
+
+  function statusActionBlockReason(p: ResidentRow) {
+    if (isAdminAccount(p)) return "Akun Admin tidak dapat dinonaktifkan.";
+    if (isCurrentUser(p)) return "Anda tidak dapat menonaktifkan akun sendiri.";
+    return null;
+  }
+
+  function deleteActionBlockReason(p: ResidentRow) {
+    if (!isAdmin) return "Hanya Admin yang dapat menghapus akun.";
+    if (isAdminAccount(p)) return "Akun Admin tidak dapat dihapus.";
+    if (isCurrentUser(p)) return "Admin tidak dapat menghapus akun sendiri.";
+    return null;
+  }
+
+  function canToggleStatus(p: ResidentRow) {
+    return statusActionBlockReason(p) === null;
+  }
+
+  function canDeleteResident(p: ResidentRow) {
+    return deleteActionBlockReason(p) === null;
+  }
+
   async function toggleStatus(p: ResidentRow) {
+    const blockReason = statusActionBlockReason(p);
+    if (blockReason) {
+      toast.error(blockReason);
+      return;
+    }
     const newStatus = p.status === "aktif" ? "nonaktif" : "aktif";
     const { error } = await supabase
       .from("profiles").update({ status: newStatus }).eq("user_id", p.user_id);
@@ -130,14 +164,18 @@ export default function ResidentsPage() {
   }
 
   async function hardDelete(p: ResidentRow) {
-    if (!isAdmin) return;
+    const blockReason = deleteActionBlockReason(p);
+    if (blockReason) {
+      toast.error(blockReason);
+      return;
+    }
     if (!confirm(`Hapus permanen akun ${p.full_name ?? p.email}?\nTindakan ini tidak dapat dibatalkan.`)) return;
     const { data, error } = await supabase.functions.invoke("admin-delete-user", {
       body: { user_id: p.user_id },
     });
     const result = data as AdminDeleteResponse | null;
     if (error || result?.error) {
-      toast.error(result?.error ?? edgeFunctionErrorMessage(error, "admin-delete-user", M.deleteFailed));
+      toast.error(result?.error ?? await edgeFunctionErrorMessageAsync(error, "admin-delete-user", M.deleteFailed));
       return;
     }
     toast.success(M.deleteSuccess);
@@ -205,7 +243,51 @@ export default function ResidentsPage() {
     setSatpamPhotoFile(file);
   }
 
-  const renderTable = (
+  const renderPersonAvatar = (p: ResidentRow, sizeClass = "h-8 w-8", fallbackClass = "text-[0.7rem]") => (
+    <Avatar className={`${sizeClass} border bg-card`}>
+      {p.avatar_url && <AvatarImage src={p.avatar_url} alt={p.full_name ?? p.email ?? "Profil"} />}
+      <AvatarFallback className={`bg-primary ${fallbackClass} text-primary-foreground`}>
+        {(p.full_name ?? p.email ?? "?")
+          .split(" ")
+          .map((part) => part[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase() || "?"}
+      </AvatarFallback>
+    </Avatar>
+  );
+
+  const openProfile = (p: ResidentRow) => {
+    setSatpamPhotoFile(null);
+    setViewing(p);
+  };
+
+  const renderRowActions = (p: ResidentRow, mobile = false) => {
+    const showStatusAction = canToggleStatus(p);
+    const showDeleteAction = canDeleteResident(p);
+    const mobileActionCount = 1 + (showStatusAction ? 1 : 0) + (showDeleteAction ? 1 : 0);
+    const mobileGridClass = mobileActionCount === 1 ? "grid grid-cols-1 gap-2" : "grid grid-cols-2 gap-2";
+
+    return (
+    <div className={mobile ? mobileGridClass : "flex flex-wrap justify-end gap-2"}>
+      <Button size="sm" variant={mobile ? "outline" : "ghost"} onClick={() => { setEditing(p); setOpen(true); }}>
+        Edit
+      </Button>
+      {showStatusAction && (
+        <Button size="sm" variant="outline" onClick={() => toggleStatus(p)}>
+          {p.status === "aktif" ? "Nonaktifkan" : "Aktifkan"}
+        </Button>
+      )}
+      {showDeleteAction && (
+        <Button size="sm" variant="destructive" onClick={() => hardDelete(p)} className={mobile ? "col-span-2" : ""}>
+          Hapus
+        </Button>
+      )}
+    </div>
+    );
+  };
+
+  const renderRows = (
     rows: typeof people,
     title: string,
     description: string,
@@ -215,7 +297,47 @@ export default function ResidentsPage() {
         <h2 className="text-base font-semibold">{title}</h2>
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
-      <Table>
+      <div className="divide-y md:hidden">
+        {q.isLoading && (
+          <div className="p-4"><Skeleton className="h-28 w-full" /></div>
+        )}
+        {!q.isLoading && rows.length === 0 && (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">{M.noData}</div>
+        )}
+        {rows.map((p) => (
+          <div key={p.user_id} className="space-y-3 p-4">
+            <div className="flex min-w-0 items-start gap-3">
+              {renderPersonAvatar(p, "h-11 w-11", "text-xs")}
+              <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => openProfile(p)}
+                  className="block max-w-full truncate text-left font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {p.full_name ?? "—"}
+                </button>
+                <div className="mt-1 truncate text-xs text-muted-foreground">{p.email ?? "—"}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Unit {formatBlockUnit(p.block_unit) ?? "—"} · {p.phone ?? "No. HP belum diisi"}
+                </div>
+                <Badge variant="outline" className={
+                  p.status === "aktif"
+                    ? "mt-2 bg-success/15 text-success border-success/30"
+                    : "mt-2 bg-muted text-muted-foreground"
+                }>
+                  {p.status === "aktif" ? "Aktif" : "Nonaktif"}
+                </Badge>
+              </div>
+              <div className="flex max-w-[8rem] shrink-0 flex-col items-end gap-1.5">
+                {p.roles.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
+                {p.roles.map((r: string) => <RoleBadge key={r} role={r} />)}
+              </div>
+            </div>
+            {renderRowActions(p, true)}
+          </div>
+        ))}
+      </div>
+      <Table className="hidden md:table">
         <TableHeader>
           <TableRow>
             <TableHead>Nama</TableHead>
@@ -241,23 +363,10 @@ export default function ResidentsPage() {
             <TableRow key={p.user_id}>
               <TableCell className="font-medium">
                 <div className="flex min-w-0 items-center gap-3">
-                  <Avatar className="h-8 w-8 border bg-card">
-                    {p.avatar_url && <AvatarImage src={p.avatar_url} alt={p.full_name ?? p.email ?? "Profil"} />}
-                    <AvatarFallback className="bg-primary text-[0.7rem] text-primary-foreground">
-                      {(p.full_name ?? p.email ?? "?")
-                        .split(" ")
-                        .map((part) => part[0])
-                        .slice(0, 2)
-                        .join("")
-                        .toUpperCase() || "?"}
-                    </AvatarFallback>
-                  </Avatar>
+                  {renderPersonAvatar(p)}
                   <button
                     type="button"
-                    onClick={() => {
-                      setSatpamPhotoFile(null);
-                      setViewing(p);
-                    }}
+                    onClick={() => openProfile(p)}
                     className="min-w-0 truncate text-left font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     {p.full_name ?? "—"}
@@ -286,14 +395,8 @@ export default function ResidentsPage() {
                   {p.status === "aktif" ? "Aktif" : "Nonaktif"}
                 </Badge>
               </TableCell>
-              <TableCell className="text-right space-x-2">
-                <Button size="sm" variant="ghost" onClick={() => { setEditing(p); setOpen(true); }}>Edit</Button>
-                <Button size="sm" variant="outline" onClick={() => toggleStatus(p)}>
-                  {p.status === "aktif" ? "Nonaktifkan" : "Aktifkan"}
-                </Button>
-                {isAdmin && (
-                  <Button size="sm" variant="destructive" onClick={() => hardDelete(p)}>Hapus</Button>
-                )}
+              <TableCell>
+                {renderRowActions(p)}
               </TableCell>
             </TableRow>
           ))}
@@ -311,9 +414,9 @@ export default function ResidentsPage() {
             Kelola data penghuni, satpam, dan pengurus.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap sm:items-center">
           <Select value={statusFilter} onValueChange={(v) => updateStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Semua Status</SelectItem>
               <SelectItem value="aktif">Aktif</SelectItem>
@@ -321,20 +424,20 @@ export default function ResidentsPage() {
             </SelectContent>
           </Select>
           {canCreateAccounts && (
-            <Button onClick={() => { setEditing(null); setOpen(true); }}>
+            <Button className="w-full sm:w-auto" onClick={() => { setEditing(null); setOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" /> Tambah Penghuni
             </Button>
           )}
         </div>
       </div>
 
-      {renderTable(
+      {renderRows(
         residentRows,
         "Penghuni",
         "Akun admin, pengurus, dan penghuni yang terkait dengan unit hunian.",
       )}
 
-      {renderTable(
+      {renderRows(
         guardRows,
         "Satpam",
         "Akun petugas keamanan yang bertugas di lingkungan Carlton.",
@@ -363,8 +466,8 @@ export default function ResidentsPage() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-                <Avatar className="h-24 w-24 border bg-card">
+              <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-start sm:text-left">
+                <Avatar className="h-24 w-24 shrink-0 border bg-card">
                   {viewingAvatarUrl && <AvatarImage src={viewingAvatarUrl} alt={viewingName} />}
                   <AvatarFallback className="bg-primary text-2xl text-primary-foreground">
                     {viewingInitials || "?"}
@@ -374,7 +477,7 @@ export default function ResidentsPage() {
                 <div className="min-w-0 flex-1 space-y-4">
                   <div>
                     <div className="text-xl font-semibold">{viewingName}</div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div className="mt-2 flex flex-wrap justify-center gap-1.5 sm:justify-start">
                       {viewing.roles.length === 0 && (
                         <Badge variant="outline" className="min-w-[6.5rem] justify-center px-3 py-1">
                           Tanpa Peran
@@ -396,28 +499,28 @@ export default function ResidentsPage() {
                   <Separator />
 
                   <div className="grid gap-3 text-sm sm:grid-cols-2">
-                    <div className="flex gap-2">
+                    <div className="flex min-w-0 gap-2 text-left">
                       <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0">
                         <div className="text-xs text-muted-foreground">Email</div>
                         <div className="truncate">{viewing.email ?? "—"}</div>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 text-left">
                       <Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div>
                         <div className="text-xs text-muted-foreground">No. HP</div>
                         <div>{viewing.phone ?? "—"}</div>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 text-left">
                       <Home className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div>
                         <div className="text-xs text-muted-foreground">Blok / Unit</div>
                         <div>{viewingBlockUnit ?? "—"}</div>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 text-left">
                       <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div>
                         <div className="text-xs text-muted-foreground">Terdaftar</div>
@@ -457,10 +560,11 @@ export default function ResidentsPage() {
                             event.target.value = "";
                           }}
                         />
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
                           <Button
                             type="button"
                             variant="outline"
+                            className="w-full sm:w-auto"
                             onClick={() => satpamPhotoInputRef.current?.click()}
                             disabled={satpamPhotoBusy}
                           >
@@ -491,6 +595,7 @@ export default function ResidentsPage() {
                         </p>
                         <Button
                           size="sm"
+                          className="w-full sm:w-auto"
                           onClick={saveSatpamPhoto}
                           disabled={!satpamPhotoFile || satpamPhotoBusy}
                         >

@@ -10,7 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { formatIDR } from "@/lib/currency";
 import type { IplSettings } from "@/lib/ipl-settings";
-import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
+import { edgeFunctionErrorMessageAsync } from "@/lib/edge-function-error";
+import { submitIplPayment, type SubmitIplPaymentResponse } from "@/lib/ipl-bill-actions";
 import { M } from "@/lib/i18n/messages";
 import { createReceiptThumbnailFile } from "@/lib/receipt-thumbnail";
 import { ACCEPT_BILL_RECEIPT, acceptsBillReceipt } from "@/lib/upload-file";
@@ -19,9 +20,6 @@ type PayableBill = {
   id: string;
   name: string;
   amount: number;
-};
-type SubmitPaymentResponse = {
-  error?: string;
 };
 
 interface Props {
@@ -70,16 +68,14 @@ export function BillPayDialog({ open, onOpenChange, bill, onPaid, paymentSetting
         }
       }
 
-      const { data, error } = await supabase.functions.invoke("submit-ipl-payment", {
-        body: {
-          bill_id: bill.id,
-          receipt_path: path,
-          receipt_thumbnail_path: thumbnailPath,
-        },
+      const { data, error } = await submitIplPayment({
+        bill_id: bill.id,
+        receipt_path: path,
+        receipt_thumbnail_path: thumbnailPath,
       });
-      const result = data as SubmitPaymentResponse | null;
+      const result = data as SubmitIplPaymentResponse | null;
       if (error || result?.error) {
-        throw new Error(result?.error ?? edgeFunctionErrorMessage(error, "submit-ipl-payment", M.uploadFailed));
+        throw new Error(result?.error ?? await edgeFunctionErrorMessageAsync(error, "submit-ipl-payment", M.uploadFailed));
       }
 
       toast.success(M.uploadSuccess);

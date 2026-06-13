@@ -27,7 +27,7 @@ import { useAuth } from "@/lib/auth";
 import { MONTHS_ID, formatShortDateID, periodFromMonthYear } from "@/lib/date";
 import { formatBlockUnit } from "@/lib/block-unit";
 import { formatIDR } from "@/lib/currency";
-import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
+import { edgeFunctionErrorMessageAsync } from "@/lib/edge-function-error";
 import { BILL_STATUS_LABELS, M } from "@/lib/i18n/messages";
 import { BillFormDialog } from "@/components/ipl/BillFormDialog";
 import { BillPayDialog } from "@/components/ipl/BillPayDialog";
@@ -35,6 +35,7 @@ import { BillReceiptDialog } from "@/components/ipl/BillReceiptDialog";
 import { BillCsvImportDialog, type BillImportFormat } from "@/components/ipl/BillCsvImportDialog";
 import { IplSettingsDialog } from "@/components/ipl/IplSettingsDialog";
 import { FALLBACK_IPL_SETTINGS, fetchIplSettings, IPL_SETTINGS_QUERY_KEY } from "@/lib/ipl-settings";
+import { updateIplBillStatus, type UpdateIplBillStatusResponse } from "@/lib/ipl-bill-actions";
 
 export type Bill = {
   id: string;
@@ -57,10 +58,6 @@ const ALL = 0;
 const BILL_STATUSES = ["belum_dibayar", "dalam_pengecekan", "lunas"] as const satisfies readonly Bill["status"][];
 type StatusFilter = Bill["status"] | "all";
 type IplViewMode = "manage" | "mine";
-type UpdateBillStatusResponse = {
-  error?: string;
-};
-
 function readMonthParam(value: string | null, fallback: number) {
   const n = Number(value);
   return Number.isInteger(n) && n >= 0 && n <= 12 ? n : fallback;
@@ -135,7 +132,7 @@ function exportRows(bills: Bill[], isStaff: boolean) {
       BILL_STATUS_LABELS[bill.status],
       bill.paid_at ? bill.paid_at.slice(0, 10) : "",
     ];
-  return isStaff
+    return isStaff
       ? [bill.profiles?.full_name ?? "", bill.profiles?.email ?? "", formatBlockUnit(bill.profiles?.block_unit) ?? "", ...common]
       : common;
   });
@@ -172,17 +169,15 @@ function StatusInlineSelect({
 
   async function applyStatus(next: Bill["status"]) {
     setBusy(true);
-    const { data, error } = await supabase.functions.invoke("update-ipl-bill-status", {
-      body: {
-        bill_id: bill.id,
-        status: next,
-      },
+    const { data, error } = await updateIplBillStatus({
+      bill_id: bill.id,
+      status: next,
     });
-    const result = data as UpdateBillStatusResponse | null;
+    const result = data as UpdateIplBillStatusResponse | null;
     setBusy(false);
     setPending(null);
     if (error || result?.error) {
-      toast.error(result?.error ?? edgeFunctionErrorMessage(error, "update-ipl-bill-status", M.saveFailed));
+      toast.error(result?.error ?? await edgeFunctionErrorMessageAsync(error, "update-ipl-bill-status", M.saveFailed));
       return;
     }
     toast.success("Status diperbarui.");
@@ -257,13 +252,14 @@ export default function IplPage() {
   const { user, hasRole } = useAuth();
   const canManageBills = hasRole("admin", "pengurus");
   const canViewOwnBills = hasRole("pengurus", "penghuni") && !hasRole("admin");
-  const [selectedViewMode, setSelectedViewMode] = useState<IplViewMode>("manage");
+  const [searchParams] = useSearchParams();
+  const requestedViewMode = searchParams.get("view") === "mine" ? "mine" : "manage";
+  const [selectedViewMode, setSelectedViewMode] = useState<IplViewMode>(requestedViewMode);
   const viewMode: IplViewMode = canManageBills
     ? canViewOwnBills ? selectedViewMode : "manage"
     : "mine";
   const isStaff = canManageBills && viewMode === "manage";
   const isOwnBills = !isStaff;
-  const [searchParams] = useSearchParams();
   const qc = useQueryClient();
   const now = new Date();
 
@@ -381,9 +377,29 @@ export default function IplPage() {
     qc.invalidateQueries({ queryKey: ["ipl-bills"] });
   };
 
+  const renderBillActions = (bill: Bill, mobile = false) => (
+    <div className={mobile ? "grid grid-cols-2 gap-2" : "flex justify-end gap-2"}>
+      {isOwnBills && bill.status === "belum_dibayar" && (
+        <Button size="sm" onClick={() => setPaying(bill)} className={mobile ? "col-span-2" : ""}>
+          Bayar
+        </Button>
+      )}
+      {isStaff && bill.status === "dalam_pengecekan" && bill.receipt_path && (
+        <Button size="sm" variant="outline" onClick={() => setViewing(bill)} className={mobile ? "col-span-2" : ""}>
+          <FileText className="mr-1 h-4 w-4" /> Lihat Bukti
+        </Button>
+      )}
+      {isStaff && (
+        <Button size="sm" variant="ghost" onClick={() => { setEditing(bill); setFormOpen(true); }} className={mobile ? "col-span-2 border" : ""}>
+          Edit
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Tagihan IPL</h1>
           <p className="text-sm text-muted-foreground">
@@ -392,9 +408,9 @@ export default function IplPage() {
               : "Tagihan IPL Anda, termasuk yang belum dibayar, dalam pengecekan, dan lunas."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
           {canManageBills && canViewOwnBills && (
-            <div className="flex rounded-md border bg-card p-1">
+            <div className="col-span-2 grid grid-cols-2 rounded-md border bg-card p-1 sm:flex">
               <Button
                 type="button"
                 size="sm"
@@ -419,7 +435,7 @@ export default function IplPage() {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={!canExport}>
+              <Button variant="outline" disabled={!canExport} className="w-full justify-center sm:w-auto">
                 <Download className="mr-2 h-4 w-4" /> Export
                 <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
@@ -437,7 +453,7 @@ export default function IplPage() {
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
+                  <Button variant="outline" className="w-full justify-center sm:w-auto">
                     <Upload className="mr-2 h-4 w-4" /> Import
                     <ChevronDown className="ml-2 h-4 w-4" />
                   </Button>
@@ -454,11 +470,11 @@ export default function IplPage() {
               <Button
                 variant="outline"
                 onClick={() => setSettingsOpen(true)}
-                className="border-success/30 bg-success/10 text-success hover:bg-success/15 hover:text-success"
+                className="col-span-2 w-full justify-center border-success/30 bg-success/10 text-success hover:bg-success/15 hover:text-success sm:w-auto"
               >
                 <Settings2 className="mr-2 h-4 w-4" /> Atur Biaya IPL
               </Button>
-              <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
+              <Button onClick={() => { setEditing(null); setFormOpen(true); }} className="col-span-2 w-full justify-center sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" /> Buat Tagihan Baru
               </Button>
             </>
@@ -467,12 +483,12 @@ export default function IplPage() {
       </div>
 
       {isStaff && (
-        <Card className="p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+        <Card className="p-3 sm:p-4">
+          <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
+            <Filter className="hidden h-4 w-4 text-muted-foreground sm:block" />
             <span className="text-sm font-medium">Filter Periode:</span>
             <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="0">Semua Bulan</SelectItem>
                 {MONTHS_ID.map((m, i) => (
@@ -481,7 +497,7 @@ export default function IplPage() {
               </SelectContent>
             </Select>
             <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="0">Semua Tahun</SelectItem>
                 {yearOptions.map((y) => (
@@ -490,7 +506,7 @@ export default function IplPage() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Status</SelectItem>
                 {BILL_STATUSES.map((status) => (
@@ -523,8 +539,58 @@ export default function IplPage() {
         </Card>
       )}
 
-      <Card>
-        <Table>
+      <Card className="overflow-hidden">
+        <div className="divide-y md:hidden">
+          {billsQ.isLoading && (
+            <div className="p-4"><Skeleton className="h-32 w-full" /></div>
+          )}
+          {!billsQ.isLoading && filteredBills.length === 0 && (
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+              {search.trim()
+                ? `Tidak ada tagihan dengan nama yang cocok "${search.trim()}".`
+                : isStaff
+                  ? "Belum ada tagihan untuk periode ini."
+                  : "Belum ada riwayat tagihan untuk akun Anda."}
+            </div>
+          )}
+          {filteredBills.map((b) => (
+            <div key={b.id} className="space-y-4 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {isStaff && (
+                    <div className="mb-1">
+                      <div className="truncate text-sm font-semibold">{b.profiles?.full_name ?? "—"}</div>
+                      {formatBlockUnit(b.profiles?.block_unit) && (
+                        <div className="text-xs text-muted-foreground">{formatBlockUnit(b.profiles?.block_unit)}</div>
+                      )}
+                    </div>
+                  )}
+                  <div className="truncate font-medium">{b.name}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Periode {b.period}</div>
+                </div>
+                {isStaff ? (
+                  <StatusInlineSelect bill={b} onChanged={refresh} />
+                ) : (
+                  <Badge variant="outline" className={statusClass[b.status]}>
+                    {BILL_STATUS_LABELS[b.status]}
+                  </Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/30 p-3 text-sm">
+                <div>
+                  <div className="text-xs text-muted-foreground">Jumlah</div>
+                  <div className="font-mono font-semibold">{formatIDR(b.amount)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Jatuh Tempo</div>
+                  <div>{formatShortDateID(b.due_date)}</div>
+                </div>
+              </div>
+              {renderBillActions(b, true)}
+            </div>
+          ))}
+        </div>
+        <Table className="hidden md:table">
           <TableHeader>
             <TableRow>
               {isStaff && <TableHead>Penghuni</TableHead>}
@@ -572,20 +638,8 @@ export default function IplPage() {
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell className="text-right space-x-2">
-                  {isOwnBills && b.status === "belum_dibayar" && (
-                    <Button size="sm" onClick={() => setPaying(b)}>Bayar</Button>
-                  )}
-                  {isStaff && b.status === "dalam_pengecekan" && b.receipt_path && (
-                    <Button size="sm" variant="outline" onClick={() => setViewing(b)}>
-                      <FileText className="mr-1 h-4 w-4" /> Lihat Bukti
-                    </Button>
-                  )}
-                  {isStaff && (
-                    <Button size="sm" variant="ghost" onClick={() => { setEditing(b); setFormOpen(true); }}>
-                      Edit
-                    </Button>
-                  )}
+                <TableCell className="text-right">
+                  {renderBillActions(b)}
                 </TableCell>
               </TableRow>
             ))}

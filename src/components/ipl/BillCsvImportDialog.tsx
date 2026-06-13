@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { FileUploadButton } from "@/components/ui/file-upload-button";
 import { supabase } from "@/integrations/supabase/client";
 import { billNameFromPeriod, periodFromDueDate } from "@/lib/date";
-import { edgeFunctionErrorMessage } from "@/lib/edge-function-error";
+import { edgeFunctionErrorMessageAsync } from "@/lib/edge-function-error";
+import { createIplBills, type CreateIplBillsResponse } from "@/lib/ipl-bill-actions";
 import { M } from "@/lib/i18n/messages";
 
 interface Row {
@@ -21,14 +22,6 @@ interface Row {
 
 type RawImportRow = Record<string, string | number | null | undefined>;
 export type BillImportFormat = "csv" | "excel";
-type CreateIplBillsResponse = {
-  created?: number;
-  skipped?: number;
-  failed?: number;
-  errors?: string[];
-  error?: string;
-};
-
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -303,15 +296,13 @@ export function BillCsvImportDialog({ open, onOpenChange, onImported, format }: 
         const period = periodFromDueDate(dueDate);
         const name = r.name?.trim() || billNameFromPeriod(period);
 
-        const { data, error } = await supabase.functions.invoke("create-ipl-bills", {
-          body: {
-            resident_user_id: uid,
-            name,
-            amount,
-            due_date: dueDate,
-            period,
-            status: "belum_dibayar",
-          },
+        const { data, error } = await createIplBills({
+          resident_user_id: uid,
+          name,
+          amount,
+          due_date: dueDate,
+          period,
+          status: "belum_dibayar",
         });
         const result = data as CreateIplBillsResponse | null;
         if (error || result?.error || (result?.failed ?? 0) > 0 || (result?.skipped ?? 0) > 0) {
@@ -320,7 +311,7 @@ export function BillCsvImportDialog({ open, onOpenChange, onImported, format }: 
           } else {
             const detail = result?.error
               ?? result?.errors?.[0]
-              ?? edgeFunctionErrorMessage(error, "create-ipl-bills", M.saveFailed);
+              ?? await edgeFunctionErrorMessageAsync(error, "create-ipl-bills", M.saveFailed);
             lines.push(`Baris ${lineNo}: ${detail}`);
           }
           fail++; continue;
